@@ -51,7 +51,7 @@ self.addEventListener('fetch', (event) => {
 			// Everything else (pages, /static files like the manifest): network-first, cache when offline.
 			try {
 				const response = await fetch(event.request);
-				const noStore = response.headers.get('cache-control')?.includes('no-store');
+				const noStore = response.headers.get('cache-control')?.toLowerCase().includes('no-store');
 				if (response.status === 200 && !noStore) {
 					event.waitUntil(cache.put(event.request, response.clone()).catch(() => {}));
 				}
