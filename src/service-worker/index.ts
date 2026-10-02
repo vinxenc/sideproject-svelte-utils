@@ -1,0 +1,68 @@
+import { self } from '$app/service-worker';
+import { immutable, assets } from '$app/manifest';
+import { version } from '$app/env';
+
+const PREFIX = 'utilities-';
+const CACHE = `${PREFIX}${version}`;
+// Hashed build output (JS/CSS): its URL changes whenever its content does.
+const IMMUTABLE = immutable.map(({ path }) => path);
+// Offline fallback for any page navigation that isn't cached ("/" is only a redirect).
+const FALLBACK = '/sign-in';
+// Precached for offline: build output, everything in /static, and the fallback page.
+const ASSETS = [...IMMUTABLE, ...assets.map(({ path }) => path), FALLBACK];
+
+self.addEventListener('install', (event) => {
+	event.waitUntil(
+		caches
+			.open(CACHE)
+			.then((cache) => cache.addAll(ASSETS))
+			.then(() => self.skipWaiting())
+	);
+});
+
+self.addEventListener('activate', (event) => {
+	event.waitUntil(
+		caches
+			.keys()
+			.then((keys) =>
+				Promise.all(
+					keys
+						.filter((key) => key.startsWith(PREFIX) && key !== CACHE)
+						.map((key) => caches.delete(key))
+				)
+			)
+			.then(() => self.clients.claim())
+	);
+});
+
+self.addEventListener('fetch', (event) => {
+	if (event.request.method !== 'GET') return;
+	const url = new URL(event.request.url);
+	if (url.origin !== self.location.origin) return;
+
+	event.respondWith(
+		(async () => {
+			const cache = await caches.open(CACHE);
+
+			// Hashed files can never be stale: cache-first.
+			const hit = IMMUTABLE.includes(url.pathname) && (await cache.match(url.pathname));
+			if (hit) return hit;
+
+			// Everything else (pages, /static files like the manifest): network-first, cache when offline.
+			try {
+				const response = await fetch(event.request);
+				const noStore = response.headers.get('cache-control')?.toLowerCase().includes('no-store');
+				if (response.status === 200 && !noStore) {
+					event.waitUntil(cache.put(event.request, response.clone()).catch(() => {}));
+				}
+				return response;
+			} catch (err) {
+				const cached =
+					(await cache.match(event.request)) ??
+					(event.request.mode === 'navigate' ? await cache.match(FALLBACK) : undefined);
+				if (cached) return cached;
+				throw err;
+			}
+		})()
+	);
+});

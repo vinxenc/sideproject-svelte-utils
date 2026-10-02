@@ -1,0 +1,9 @@
+# Agent notes
+
+See [README.md](README.md) for stack, layout and scripts.
+
+- Imports use `#lib/...`, never `$lib/...` (SvelteKit 3 subpath imports). The shadcn-svelte skill's examples show `$lib`; translate them, e.g. `#lib/components/ui/button/index.js`.
+- Add UI with `pnpm dlx shadcn-svelte@latest add <name> --yes`; check https://shadcn-svelte.com/blocks before building a page by hand.
+- Don't edit `src/lib/components/ui/*` by hand; re-add with `--overwrite` instead.
+- Service worker lives in `src/service-worker/` with its own tsconfig; it must not import app code.
+- Before finishing: `pnpm check && pnpm lint && pnpm build`.
