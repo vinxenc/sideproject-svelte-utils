@@ -65,7 +65,7 @@ vite.config.ts             SvelteKit + Tailwind + Cloudflare adapter
 
 ## Getting started
 
-Requirements: Node 22+ and pnpm 9+.
+Requirements: Node 22.17+ and pnpm 9+.
 
 ```sh
 pnpm install

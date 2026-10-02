@@ -29,7 +29,7 @@
 		</Field.Field>
 		<Field.Field>
 			<Field.Label for="password">Password</Field.Label>
-			<Input id="password" type="password" required />
+			<Input id="password" type="password" minlength={8} required />
 			<Field.Description>Must be at least 8 characters long.</Field.Description>
 		</Field.Field>
 		<Field.Field>

@@ -2,10 +2,11 @@ import { self } from '$app/service-worker';
 import { immutable, assets } from '$app/manifest';
 import { version } from '$app/env';
 
-const CACHE = `cache-${version}`;
+const PREFIX = 'utilities-';
+const CACHE = `${PREFIX}${version}`;
 // Hashed build output (JS/CSS): its URL changes whenever its content does.
 const IMMUTABLE = immutable.map(({ path }) => path);
-// Offline fallback for any page that isn't cached ("/" is only a redirect).
+// Offline fallback for any page navigation that isn't cached ("/" is only a redirect).
 const FALLBACK = '/sign-in';
 // Precached for offline: build output, everything in /static, and the fallback page.
 const ASSETS = [...IMMUTABLE, ...assets.map(({ path }) => path), FALLBACK];
@@ -24,7 +25,11 @@ self.addEventListener('activate', (event) => {
 		caches
 			.keys()
 			.then((keys) =>
-				Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
+				Promise.all(
+					keys
+						.filter((key) => key.startsWith(PREFIX) && key !== CACHE)
+						.map((key) => caches.delete(key))
+				)
 			)
 			.then(() => self.clients.claim())
 	);
@@ -46,10 +51,14 @@ self.addEventListener('fetch', (event) => {
 			// Everything else (pages, /static files like the manifest): network-first, cache when offline.
 			try {
 				const response = await fetch(event.request);
-				if (response.status === 200) cache.put(event.request, response.clone());
+				if (response.status === 200) {
+					event.waitUntil(cache.put(event.request, response.clone()).catch(() => {}));
+				}
 				return response;
 			} catch (err) {
-				const cached = (await cache.match(event.request)) ?? (await cache.match(FALLBACK));
+				const cached =
+					(await cache.match(event.request)) ??
+					(event.request.mode === 'navigate' ? await cache.match(FALLBACK) : undefined);
 				if (cached) return cached;
 				throw err;
 			}
