@@ -3,7 +3,7 @@
 	"compilerOptions": {
 		"strict": true,
 		"checkJs": false,
-		"types": ["$app/types", "./worker-configuration.d.ts"]
+		"types": ["$app/types"]
 	},
 	"include": ["src", "vite.config.ts"],
 	"exclude": ["src/service-worker"]

@@ -4,7 +4,6 @@ node_modules
 .output
 .vercel
 .netlify
-.wrangler
 /.svelte-kit
 /build
 
@@ -23,3 +22,10 @@ vite.config.ts.timestamp-*
 
 # Logs
 *.log
+
+# Local SQLite database
+/prisma/*.db
+/prisma/*.db-journal
+
+# Generated Prisma client
+/src/lib/server/prisma

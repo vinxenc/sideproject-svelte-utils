@@ -2,13 +2,39 @@
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { authClient } from '#lib/auth-client.js';
+	import { goto } from '$app/navigation';
 	import { cn } from '#lib/utils.js';
 	import type { HTMLAttributes } from 'svelte/elements';
 
 	let { class: className, ...restProps }: HTMLAttributes<HTMLFormElement> = $props();
+
+	let name = $state('');
+	let email = $state('');
+	let password = $state('');
+	let confirmPassword = $state('');
+	let error = $state('');
+	let pending = $state(false);
+
+	async function onsubmit(event: SubmitEvent) {
+		event.preventDefault();
+		error = '';
+		if (password !== confirmPassword) {
+			error = 'Passwords do not match';
+			return;
+		}
+		pending = true;
+		const result = await authClient.signUp.email({ name, email, password });
+		pending = false;
+		if (result.error) {
+			error = result.error.message ?? 'Sign up failed';
+			return;
+		}
+		await goto('/dashboard', { invalidateAll: true });
+	}
 </script>
 
-<form class={cn('flex flex-col gap-6', className)} {...restProps}>
+<form class={cn('flex flex-col gap-6', className)} {onsubmit} {...restProps}>
 	<Field.Group>
 		<div class="flex flex-col items-center gap-1 text-center">
 			<h1 class="text-2xl font-bold">Create your account</h1>
@@ -18,27 +44,57 @@
 		</div>
 		<Field.Field>
 			<Field.Label for="name">Full Name</Field.Label>
-			<Input id="name" type="text" placeholder="John Doe" required />
+			<Input
+				id="name"
+				type="text"
+				placeholder="John Doe"
+				autocomplete="name"
+				required
+				bind:value={name}
+			/>
 		</Field.Field>
 		<Field.Field>
 			<Field.Label for="email">Email</Field.Label>
-			<Input id="email" type="email" placeholder="m@example.com" required />
+			<Input
+				id="email"
+				type="email"
+				placeholder="m@example.com"
+				autocomplete="email"
+				required
+				bind:value={email}
+			/>
 			<Field.Description>
 				We'll use this to contact you. We will not share your email with anyone else.
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>
 			<Field.Label for="password">Password</Field.Label>
-			<Input id="password" type="password" minlength={8} required />
+			<Input
+				id="password"
+				type="password"
+				minlength={8}
+				autocomplete="new-password"
+				required
+				bind:value={password}
+			/>
 			<Field.Description>Must be at least 8 characters long.</Field.Description>
 		</Field.Field>
 		<Field.Field>
 			<Field.Label for="confirm-password">Confirm Password</Field.Label>
-			<Input id="confirm-password" type="password" required />
+			<Input
+				id="confirm-password"
+				type="password"
+				autocomplete="new-password"
+				required
+				bind:value={confirmPassword}
+			/>
 			<Field.Description>Please confirm your password.</Field.Description>
 		</Field.Field>
 		<Field.Field>
-			<Button type="submit">Create Account</Button>
+			<Field.Error>{error}</Field.Error>
+			<Button type="submit" disabled={pending}>
+				{pending ? 'Creating account…' : 'Create Account'}
+			</Button>
 		</Field.Field>
 		<Field.Separator>Or continue with</Field.Separator>
 		<Field.Field>

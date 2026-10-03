@@ -8,9 +8,6 @@ bun.lockb
 # Miscellaneous
 /static/
 
-# Generated
-worker-configuration.d.ts
-
 # Vendored agent skills
 .agents/
 skills-lock.json

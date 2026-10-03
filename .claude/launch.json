@@ -2,6 +2,12 @@
 	"version": "0.0.1",
 	"configurations": [
 		{ "name": "preview", "runtimeExecutable": "pnpm", "runtimeArgs": ["preview"], "port": 4173 },
-		{ "name": "dev", "runtimeExecutable": "pnpm", "runtimeArgs": ["dev"], "port": 5173 }
+		{ "name": "dev", "runtimeExecutable": "pnpm", "runtimeArgs": ["dev"], "port": 5173 },
+		{
+			"name": "db-studio",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": ["db-dev:studio", "--port", "5555", "--browser", "none"],
+			"port": 5555
+		}
 	]
 }

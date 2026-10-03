@@ -1,6 +1,6 @@
 # Utilities
 
-An installable Progressive Web App (PWA) for web, mobile and desktop, built with SvelteKit and deployed to Cloudflare Workers.
+An installable Progressive Web App (PWA) for web, mobile and desktop, built with SvelteKit. Local development only for now; hosting is not chosen yet.
 
 ## Tech stack
 
@@ -10,7 +10,8 @@ An installable Progressive Web App (PWA) for web, mobile and desktop, built with
 | UI        | [shadcn-svelte](https://shadcn-svelte.com) (style `nova`, base color `neutral`), [Bits UI](https://bits-ui.com), [Lucide](https://lucide.dev) icons, [mode-watcher](https://mode-watcher.svecosystem.com) for dark/light mode |
 | Styling   | [Tailwind CSS v4](https://tailwindcss.com) via `@tailwindcss/vite`, Inter font                                                                                                                                                |
 | PWA       | SvelteKit built-in service worker + static web manifest, icons from `@vite-pwa/assets-generator`                                                                                                                              |
-| Hosting   | [Cloudflare Workers](https://developers.cloudflare.com/workers/) (static assets) via `@sveltejs/adapter-cloudflare` and `wrangler`                                                                                            |
+| Auth / DB | [Better Auth](https://www.better-auth.com) (email + password) → [Prisma 7](https://www.prisma.io/docs) + `@prisma/adapter-better-sqlite3` → local SQLite (`prisma/dev.db`)                                                    |
+| Hosting   | Not chosen yet; local only (`pnpm dev`, `pnpm preview`)                                                                                                                                                                       |
 | Tooling   | pnpm, Vite 8, ESLint, Prettier, svelte-check                                                                                                                                                                                  |
 
 ## Architecture
@@ -23,8 +24,8 @@ Browser / installed PWA
   │     • pages & data: network-first, cache fallback when offline
   │
   ▼
-Cloudflare Worker (.svelte-kit/cloudflare/_worker.js)
-  ├── static assets  → served directly by the ASSETS binding
+SvelteKit server (Node: vite dev / vite preview)
+  ├── /api/auth/*     → Better Auth (src/routes/api/auth/)
   └── everything else → SvelteKit SSR (routes in src/routes/)
 ```
 
@@ -38,9 +39,20 @@ src/
   routes/
     +layout.svelte         root layout: layout.css, ModeWatcher, header
     layout.css             Tailwind + shadcn theme tokens (light/dark)
-    +page.ts               "/" redirects to /sign-in
-    sign-in/  sign-up/     auth pages (shadcn blocks login-02, signup-02)
+    +page.server.ts        "/" redirects to /dashboard
+    (app)/                 requires a session, else redirects to /sign-in
+      dashboard/           landing page after sign-in/sign-up (sidebar-13 layout, full page)
+    api/auth/[...all]/     Better Auth REST API (sign-in, sign-up, get-session, …)
+    (guest)/               redirects signed-in users to /dashboard
+      sign-in/  sign-up/   auth pages (shadcn blocks login-02, signup-02)
+  env.ts                   env var definitions (read via $app/env/private)
+  hooks.server.ts          fills locals.user via lib/server/session.ts
   lib/
+    server/
+      auth.ts              "auth service": Better Auth + Prisma; access token = 5-min JWT cookie signed with a key pair (jwt plugin), refresh token = session cookie
+      session.ts           "app" side: verifies the access token with the public keys from /api/auth/jwks, refreshes via /api/auth/get-session
+      prisma/              generated Prisma client (gitignored, `pnpm db-dev:generate`)
+    auth-client.ts         Better Auth Svelte client (authClient.signIn / useSession / …)
     components/
       ui/                  shadcn-svelte components (generated, managed by the CLI)
       site-header.svelte   dark/light toggle (top-right); logo bar only in the desktop app title bar
@@ -48,10 +60,11 @@ src/
       signup-form.svelte   sign-up form
     utils.ts               cn() + shadcn helper types
   service-worker/          offline caching (own tsconfig, WebWorker types)
+prisma/schema.prisma       Better Auth models (user, session, account, verification)
+prisma/migrations/         SQL migrations (prisma migrate dev)
 static/                    manifest.webmanifest, icons, robots.txt
 components.json            shadcn-svelte config
-wrangler.jsonc             Cloudflare Worker config
-vite.config.ts             SvelteKit + Tailwind + Cloudflare adapter
+vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is chosen)
 ```
 
 ### Conventions
@@ -68,11 +81,15 @@ vite.config.ts             SvelteKit + Tailwind + Cloudflare adapter
 Requirements: Node 22.17+ and pnpm 9+.
 
 ```sh
-pnpm install
-pnpm dev            # dev server at http://localhost:5173
+pnpm install            # also generates the Prisma client
+cp .env.example .env    # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
+pnpm db-dev:migrate         # creates prisma/dev.db and applies migrations
+pnpm dev                # dev server at http://localhost:5173
 ```
 
-The service worker only runs in production builds. To test the PWA (offline, install) on the real Cloudflare runtime:
+Auth endpoints live under `/api/auth/*` (e.g. `POST /api/auth/sign-up/email`). API docs: `/api/auth/reference` (Scalar UI), raw OpenAPI JSON: `/api/auth/open-api/generate-schema`, public signing keys: `/api/auth/jwks`.
+
+The service worker only runs in production builds. To test the production build and the PWA (offline, install) locally:
 
 ```sh
 pnpm build
@@ -83,25 +100,61 @@ Then open it in Chrome or Edge and use the install icon in the address bar to in
 
 ## Scripts
 
-| Command          | What it does                                            |
-| ---------------- | ------------------------------------------------------- |
-| `pnpm dev`       | Vite dev server with hot reload                         |
-| `pnpm build`     | Production build into `.svelte-kit/cloudflare`          |
-| `pnpm preview`   | Run the production build locally with `wrangler dev`    |
-| `pnpm check`     | Regenerate Cloudflare types + type-check (svelte-check) |
-| `pnpm lint`      | Prettier check + ESLint                                 |
-| `pnpm format`    | Prettier write                                          |
-| `pnpm gen:icons` | Regenerate PWA icons from `static/icon.svg`             |
+| Command                | What it does                                                              |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `pnpm dev`             | Vite dev server with hot reload                                           |
+| `pnpm build`           | Production build into `.svelte-kit/output`                                |
+| `pnpm preview`         | Serve the production build from Node on port 4173 (`vite preview`)        |
+| `pnpm check`           | Type-check (svelte-check)                                                 |
+| `pnpm lint`            | Prettier check + ESLint                                                   |
+| `pnpm format`          | Prettier write                                                            |
+| `pnpm gen:icons`       | Regenerate PWA icons from `static/icon.svg`                               |
+| `pnpm db-dev:generate` | Regenerate the Prisma client after editing the schema                     |
+| `pnpm db-dev:migrate`  | `prisma migrate dev`: create + apply a migration after editing the schema |
+| `pnpm db-dev:studio`   | Browse the local database in Prisma Studio                                |
+
+## Database changes
+
+Edit `prisma/schema.prisma` (or regenerate Better Auth's models with `pnpm dlx auth@latest generate --output prisma/schema.prisma` after adding plugins), then:
+
+```sh
+pnpm db-dev:migrate --name <change>
+```
+
+The Prisma CLI gets the database path from the `db-dev:*` scripts (`--url file:./prisma/dev.db`); the app reads `DATABASE_URL` from `.env`. Keep the two in sync if you move the file.
 
 ## Deploy
 
-```sh
-pnpm wrangler login     # once
-pnpm build
-pnpm wrangler deploy    # → https://utilities.<your-subdomain>.workers.dev
-```
+Not set up yet. When hosting is chosen: add its SvelteKit adapter in `vite.config.ts`, and move auth off the local SQLite file (`better-sqlite3`) to a hosted database by swapping the Prisma driver adapter in `src/lib/server/auth.ts`.
 
-Run `pnpm check` after editing `wrangler.jsonc` so the generated `worker-configuration.d.ts` types stay in sync.
+### Auth model
+
+| Token         | Cookie                      | Lifetime | Verified by                                                                   |
+| ------------- | --------------------------- | -------- | ----------------------------------------------------------------------------- |
+| Access token  | `better-auth.session_data`  | 5 min    | Signature, with the public keys at `/api/auth/jwks` (no DB, no shared secret) |
+| Refresh token | `better-auth.session_token` | 7 days   | The `session` table (revocable); `get-session` issues a new access token      |
+
+Production builds prefix both cookies with `__Secure-`. Web clients only ever use these httpOnly cookies, so frontend code never touches a token.
+
+### Production checklist
+
+- **Secrets & URLs:** set a strong `BETTER_AUTH_SECRET` (`openssl rand -base64 32`) in the host's secret store, and set `baseURL` in `auth.ts` (or a `BETTER_AUTH_URL` env var) to the public origin so callbacks and the JWT issuer don't depend on the request's `Host` header.
+- **Database:** move off `prisma/dev.db` to a hosted database (new Prisma driver adapter in `auth.ts`), and apply migrations with `prisma migrate deploy` (it needs a `prisma.config.ts` with `datasource.url`, since `migrate deploy` has no `--url` flag).
+- **HTTPS only:** required for `__Secure-` cookies, and a leaked token is usable immediately.
+- **Key rotation:** set `jwt({ jwks: { rotationInterval, gracePeriod } })`. `src/lib/server/session.ts` caches the JWKS until restart, so make it refetch when it sees an unknown `kid` (or use `jose`'s `createRemoteJWKSet`, which does this) before turning rotation on.
+- **Revocation lag:** a revoked session's access token stays valid until it expires (5 min). Shorten `session.cookieCache.maxAge` if that matters.
+- **Rate limiting:** Better Auth's limiter needs the real client IP behind a proxy: set `advanced.ipAddress.ipAddressHeaders` (e.g. `x-forwarded-for`) or `trustedProxies`.
+- **API docs:** `openAPI()` publishes every auth endpoint at `/api/auth/reference`; enable it only outside production if that matters.
+- **Splitting auth into its own service:** route `/api/auth/*` to it with a reverse proxy (cookies keep working), and point the two URLs in `session.ts` (`/api/auth/jwks`, `/api/auth/get-session`) at it.
+
+### When a mobile app or external API client arrives
+
+These clients can't use the browser cookies, so they send tokens in the `Authorization` header:
+
+1. **Auth server:** add `bearer()` (lets clients send the session token as `Authorization: Bearer`) next to `jwt()`, which already serves `GET /api/auth/token` (short-lived access JWT, 15 min by default). For Expo/React Native also add `@better-auth/expo` and the app scheme to `trustedOrigins`.
+2. **Client:** keep the session token (refresh token) in secure storage (Keychain/Keystore, Expo SecureStore), keep the access JWT in memory, fetch a new one from `/api/auth/token` when it expires or an API call returns 401, and send the user back to sign-in if `/token` itself returns 401.
+3. **API:** accept `Authorization: Bearer <jwt>` in `session.ts` before the cookie path, verified with `jose` (add it as a direct dependency): `jwtVerify(token, createRemoteJWKSet(new URL('/api/auth/jwks', AUTH_URL)), { issuer, audience })`. Other services do the same with their language's JWT library and the JWKS URL.
+4. **If a browser app on another domain uses Bearer:** allow the `Authorization` header in CORS.
 
 ## AI agents
 

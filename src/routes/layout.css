@@ -125,5 +125,12 @@
 	}
 	html {
 		@apply font-sans;
+		/* Height of the installed desktop app's title bar (site-header.svelte); 0 everywhere else. */
+		--titlebar-height: 0px;
+	}
+	@media (display-mode: window-controls-overlay) {
+		html {
+			--titlebar-height: env(titlebar-area-height, 2.25rem);
+		}
 	}
 }
