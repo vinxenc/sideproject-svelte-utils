@@ -6,10 +6,11 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 </script>
 
+<!-- Browser/mobile: only a floating theme toggle, top-right. -->
 <header
-	class="sticky top-0 z-10 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center justify-between gap-2 border-b bg-background px-4 pt-[env(safe-area-inset-top)] md:px-6"
+	class="fixed top-[env(safe-area-inset-top)] right-0 z-10 flex items-center justify-between gap-2 p-4"
 >
-	<a href="/sign-in" class="flex items-center gap-2 font-medium">
+	<a href="/sign-in" class="hidden items-center gap-2 font-medium">
 		<div
 			class="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground"
 		>
@@ -25,15 +26,24 @@
 </header>
 
 <style>
-	/* Installed desktop app with the title bar hidden: fill the title bar between the window buttons and the browser's own buttons. */
+	/* Installed desktop app with the title bar hidden: a full bar with the logo, filling the title bar
+	   between the window buttons and the browser's own buttons. */
 	@media (display-mode: window-controls-overlay) {
 		header {
+			position: sticky;
+			top: 0;
+			width: 100%;
+			border-bottom: 1px solid var(--border);
+			background: var(--background);
 			height: env(titlebar-area-height, 2.25rem);
 			padding: 0 calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)) 0
 				calc(env(titlebar-area-x, 0px) + 0.25rem);
 			-webkit-app-region: drag;
 		}
-		header :global(a),
+		header a {
+			display: flex;
+		}
+		header a,
 		header :global(button) {
 			-webkit-app-region: no-drag;
 		}
