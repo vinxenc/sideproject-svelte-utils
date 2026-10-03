@@ -43,7 +43,7 @@ src/
   lib/
     components/
       ui/                  shadcn-svelte components (generated, managed by the CLI)
-      site-header.svelte   app header: logo + dark/light toggle (right)
+      site-header.svelte   dark/light toggle (top-right); logo bar only in the desktop app title bar
       login-form.svelte    sign-in form
       signup-form.svelte   sign-up form
     utils.ts               cn() + shadcn helper types
