@@ -38,7 +38,8 @@
 	let active = $state('Home');
 
 	async function signOut() {
-		await authClient.signOut();
+		const { error } = await authClient.signOut();
+		if (error) return;
 		await goto('/sign-in', { invalidateAll: true });
 	}
 </script>

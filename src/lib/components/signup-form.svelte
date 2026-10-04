@@ -24,13 +24,18 @@
 			return;
 		}
 		pending = true;
-		const result = await authClient.signUp.email({ name, email, password });
-		pending = false;
-		if (result.error) {
-			error = result.error.message ?? 'Sign up failed';
-			return;
+		try {
+			const result = await authClient.signUp.email({ name, email, password });
+			if (result.error) {
+				error = result.error.message ?? 'Sign up failed';
+				return;
+			}
+			await goto('/dashboard', { invalidateAll: true });
+		} catch {
+			error = 'Could not reach the server. Try again.';
+		} finally {
+			pending = false;
 		}
-		await goto('/dashboard', { invalidateAll: true });
 	}
 </script>
 

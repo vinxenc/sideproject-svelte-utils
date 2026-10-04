@@ -6,14 +6,19 @@ import type { auth } from './auth.js';
 // (over HTTP) for public keys and refreshes, so it keeps working once auth moves to
 // its own service (point these paths at that service's URL).
 type Session = typeof auth.$Infer.Session;
-let jwks: { keys: Record<string, string>[] };
+let jwks: { keys: Record<string, string>[] } | undefined;
 
 export async function getUser(event: RequestEvent): Promise<Session['user'] | null> {
 	// ponytail: keys cached until restart; refetch on unknown kid if key rotation is enabled.
-	jwks ??= await (await event.fetch('/api/auth/jwks')).json();
+	// Only a valid response is cached, so a failed fetch is retried on the next request.
+	if (!jwks) {
+		const res = await event.fetch('/api/auth/jwks');
+		const body = res.ok ? await res.json() : null;
+		if (Array.isArray(body?.keys)) jwks = body;
+	}
 
 	// Access token: the signed session_data JWT, verified locally with the public keys.
-	const cached = await getCookieCache(event.request, { strategy: 'jwt', jwt: { jwks } });
+	const cached = jwks && (await getCookieCache(event.request, { strategy: 'jwt', jwt: { jwks } }));
 	if (cached) return cached.user as Session['user'];
 
 	// Access token missing or expired: refresh with the session token, which also

@@ -31,13 +31,18 @@
 		event.preventDefault();
 		pending = true;
 		error = '';
-		const result = await authClient.signIn.email({ email, password });
-		pending = false;
-		if (result.error) {
-			error = result.error.message ?? 'Sign in failed';
-			return;
+		try {
+			const result = await authClient.signIn.email({ email, password });
+			if (result.error) {
+				error = result.error.message ?? 'Sign in failed';
+				return;
+			}
+			await goto('/dashboard', { invalidateAll: true });
+		} catch {
+			error = 'Could not reach the server. Try again.';
+		} finally {
+			pending = false;
 		}
-		await goto('/dashboard', { invalidateAll: true });
 	}
 </script>
 
