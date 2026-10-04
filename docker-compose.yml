@@ -1,0 +1,23 @@
+# Local development database. Start with `docker compose up -d`; data persists in the
+# `pgdata` volume (`docker compose down -v` wipes it). Matches DATABASE_URL in .env.example.
+name: utilities
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: utilities
+      POSTGRES_PASSWORD: utilities
+      POSTGRES_DB: utilities
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U utilities -d utilities']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  pgdata:

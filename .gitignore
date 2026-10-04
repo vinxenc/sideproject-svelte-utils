@@ -23,9 +23,5 @@ vite.config.ts.timestamp-*
 # Logs
 *.log
 
-# Local SQLite database
-/prisma/*.db
-/prisma/*.db-journal
-
 # Generated Prisma client
 /src/lib/server/prisma
