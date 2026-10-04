@@ -1,0 +1,24 @@
+# Local development database. Start with `docker compose up -d --wait`; data persists in the
+# `pgdata` volume (`docker compose down -v` wipes it). Matches DATABASE_URL in .env.example.
+name: utilities
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: utilities
+      POSTGRES_PASSWORD: utilities
+      POSTGRES_DB: utilities
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql
+    # `docker compose up -d --wait` returns once this passes; without it the first migrate fails.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U utilities -d utilities']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  pgdata:

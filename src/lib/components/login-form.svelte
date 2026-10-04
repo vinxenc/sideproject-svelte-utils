@@ -5,9 +5,12 @@
 		Field,
 		FieldLabel,
 		FieldDescription,
-		FieldSeparator
+		FieldSeparator,
+		FieldError
 	} from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { authClient } from '#lib/auth-client.js';
+	import { goto } from '$app/navigation';
 	import { cn, type WithElementRef } from '#lib/utils.js';
 	import type { HTMLFormAttributes } from 'svelte/elements';
 
@@ -18,9 +21,32 @@
 	}: WithElementRef<HTMLFormAttributes> = $props();
 
 	const id = $props.id();
+
+	let email = $state('');
+	let password = $state('');
+	let error = $state('');
+	let pending = $state(false);
+
+	async function onsubmit(event: SubmitEvent) {
+		event.preventDefault();
+		pending = true;
+		error = '';
+		try {
+			const result = await authClient.signIn.email({ email, password });
+			if (result.error) {
+				error = result.error.message ?? 'Sign in failed';
+				return;
+			}
+			await goto('/dashboard', { invalidateAll: true });
+		} catch {
+			error = 'Could not reach the server. Try again.';
+		} finally {
+			pending = false;
+		}
+	}
 </script>
 
-<form class={cn('flex flex-col gap-6', className)} bind:this={ref} {...restProps}>
+<form class={cn('flex flex-col gap-6', className)} bind:this={ref} {onsubmit} {...restProps}>
 	<FieldGroup>
 		<div class="flex flex-col items-center gap-1 text-center">
 			<h1 class="text-2xl font-bold">Login to your account</h1>
@@ -30,7 +56,14 @@
 		</div>
 		<Field>
 			<FieldLabel for="email-{id}">Email</FieldLabel>
-			<Input id="email-{id}" type="email" placeholder="m@example.com" required />
+			<Input
+				id="email-{id}"
+				type="email"
+				placeholder="m@example.com"
+				autocomplete="email"
+				required
+				bind:value={email}
+			/>
 		</Field>
 		<Field>
 			<div class="flex items-center">
@@ -39,10 +72,17 @@
 					Forgot your password?
 				</a>
 			</div>
-			<Input id="password-{id}" type="password" required />
+			<Input
+				id="password-{id}"
+				type="password"
+				autocomplete="current-password"
+				required
+				bind:value={password}
+			/>
 		</Field>
 		<Field>
-			<Button type="submit">Login</Button>
+			<FieldError>{error}</FieldError>
+			<Button type="submit" disabled={pending}>{pending ? 'Logging in…' : 'Login'}</Button>
 		</Field>
 		<FieldSeparator>Or continue with</FieldSeparator>
 		<Field>
