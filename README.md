@@ -63,6 +63,8 @@ src/
 prisma/schema.prisma       Better Auth models (user, session, account, verification, jwks)
 prisma/migrations/         SQL migrations (prisma migrate dev)
 docker-compose.yml         local Postgres 18 for development
+prisma.config.ts           Prisma CLI config: DATABASE_URL from settings/env.ts
+settings/env.ts            env for tools outside SvelteKit: loads .env (dotenv), validates (envalid)
 static/                    manifest.webmanifest, icons, robots.txt
 components.json            shadcn-svelte config
 vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is chosen)
@@ -82,11 +84,11 @@ vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is cho
 Requirements: Node 22.17+, pnpm 9+ and Docker (for the local Postgres).
 
 ```sh
-pnpm install            # also generates the Prisma client
-cp .env.example .env    # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
-docker compose up -d    # local Postgres on localhost:5432 (user/password/db: utilities)
-pnpm db-dev:migrate     # apply migrations
-pnpm dev                # dev server at http://localhost:5173
+pnpm install                  # also generates the Prisma client
+cp .env.example .env          # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
+docker compose up -d --wait   # local Postgres on localhost:5432 (user/password/db: utilities)
+pnpm db-dev:migrate           # apply migrations
+pnpm dev                      # dev server at http://localhost:5173
 ```
 
 `docker compose down` stops Postgres and keeps the data; `docker compose down -v` also wipes it.
@@ -104,18 +106,18 @@ Then open it in Chrome or Edge and use the install icon in the address bar to in
 
 ## Scripts
 
-| Command                | What it does                                                                                         |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| `pnpm dev`             | Vite dev server with hot reload                                                                      |
-| `pnpm build`           | Production build into `.svelte-kit/output`                                                           |
-| `pnpm preview`         | Serve the production build from Node on port 4173 (`vite preview`)                                   |
-| `pnpm check`           | Type-check (svelte-check)                                                                            |
-| `pnpm lint`            | Prettier check + ESLint                                                                              |
-| `pnpm format`          | Prettier write                                                                                       |
-| `pnpm gen:icons`       | Regenerate PWA icons from `static/icon.svg`                                                          |
-| `pnpm db-dev:generate` | Regenerate the Prisma client after editing the schema                                                |
-| `pnpm db-dev:migrate`  | `prisma migrate dev` on the local Postgres: apply migrations, or create one after editing the schema |
-| `pnpm db-dev:studio`   | Browse the local Postgres in Prisma Studio                                                           |
+| Command                | What it does                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `pnpm dev`             | Vite dev server with hot reload                                                                  |
+| `pnpm build`           | Production build into `.svelte-kit/output`                                                       |
+| `pnpm preview`         | Serve the production build from Node on port 4173 (`vite preview`)                               |
+| `pnpm check`           | Type-check (svelte-check)                                                                        |
+| `pnpm lint`            | Prettier check + ESLint                                                                          |
+| `pnpm format`          | Prettier write                                                                                   |
+| `pnpm gen:icons`       | Regenerate PWA icons from `static/icon.svg`                                                      |
+| `pnpm db-dev:generate` | Regenerate the Prisma client after editing the schema                                            |
+| `pnpm db-dev:migrate`  | `prisma migrate dev` on `DATABASE_URL`: apply migrations, or create one after editing the schema |
+| `pnpm db-dev:studio`   | Browse the database at `DATABASE_URL` in Prisma Studio                                           |
 
 ## Database changes
 
@@ -125,7 +127,7 @@ Edit `prisma/schema.prisma` (or regenerate Better Auth's models with `pnpm dlx a
 pnpm db-dev:migrate --name <change>   # writes prisma/migrations/<timestamp>_<change>/ and applies it locally
 ```
 
-The `db-dev:*` scripts carry the local connection string (`--url`), matching `docker-compose.yml`; the app reads `DATABASE_URL` from `.env`. Keep them in sync if you change the compose credentials.
+The app and the Prisma CLI both read `DATABASE_URL` from `.env` (the app via `src/env.ts`, the CLI via `settings/env.ts`, which validates it with [envalid](https://github.com/af/envalid)), so pointing at another database is a one-line change. New variables go in `src/env.ts` if the app reads them, and in `settings/env.ts` if a CLI or script does.
 
 ## Auth
 
@@ -152,7 +154,7 @@ Not set up yet. When hosting is chosen: add its SvelteKit adapter in `vite.confi
 ### Production checklist
 
 - **Secrets & URLs:** set a strong `BETTER_AUTH_SECRET` (`openssl rand -base64 32`) in the host's secret store, and set `baseURL` in `auth.ts` (or a `BETTER_AUTH_URL` env var) to the public origin so callbacks and the JWT issuer don't depend on the request's `Host` header.
-- **Database:** a hosted Postgres, with `DATABASE_URL` in the host's secret store (and `?sslmode=require` if the provider needs TLS). Apply migrations with `prisma migrate deploy` as a CI step before each release; it has no `--url` flag, so add a `prisma.config.ts` with `datasource: { url: process.env.DATABASE_URL }` at that point.
+- **Database:** a hosted Postgres, with `DATABASE_URL` in the host's secret store (and `?sslmode=require` if the provider needs TLS). Apply migrations with `prisma migrate deploy` as a CI step before each release; `prisma.config.ts` picks up `DATABASE_URL` from the environment.
 - **HTTPS only:** required for `__Secure-` cookies, and a leaked token is usable immediately.
 - **Key rotation:** set `jwt({ jwks: { rotationInterval, gracePeriod } })`. `src/lib/server/session.ts` caches the JWKS until restart, so make it refetch when it sees an unknown `kid` (or use `jose`'s `createRemoteJWKSet`, which does this) before turning rotation on.
 - **Revocation lag:** a revoked session's access token stays valid until it expires (5 min). Shorten `session.cookieCache.maxAge` if that matters.

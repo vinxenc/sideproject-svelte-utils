@@ -14,8 +14,8 @@
 		"format": "prettier --write .",
 		"gen:icons": "pwa-assets-generator",
 		"db-dev:generate": "prisma generate",
-		"db-dev:migrate": "prisma migrate dev --url postgresql://utilities:utilities@localhost:5432/utilities",
-		"db-dev:studio": "prisma studio --url postgresql://utilities:utilities@localhost:5432/utilities"
+		"db-dev:migrate": "prisma migrate dev",
+		"db-dev:studio": "prisma studio"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -32,6 +32,8 @@
 		"better-auth": "^1.7.7",
 		"bits-ui": "^2.18.0",
 		"cn": "^0.3.0",
+		"dotenv": "^18.0.5",
+		"envalid": "^8.2.0",
 		"eslint": "^10.4.1",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.19.0",
