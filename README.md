@@ -51,7 +51,7 @@ src/
     server/
       auth.ts              "auth service": Better Auth + Prisma; access token = 5-min JWT cookie signed with a key pair (jwt plugin), refresh token = session cookie
       session.ts           "app" side: verifies the access token with the public keys from /api/auth/jwks, refreshes via /api/auth/get-session
-      prisma/              generated Prisma client (gitignored, `pnpm db-dev:generate`)
+      prisma/              generated Prisma client (gitignored, `pnpm db:generate`)
     auth-client.ts         Better Auth Svelte client (authClient.signIn / useSession / …)
     components/
       ui/                  shadcn-svelte components (generated, managed by the CLI)
@@ -87,7 +87,7 @@ Requirements: Node 22.17+, pnpm 9+ and Docker (for the local Postgres).
 pnpm install                  # also generates the Prisma client
 cp .env.example .env          # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
 docker compose up -d --wait   # local Postgres on localhost:5432 (user/password/db: utilities)
-pnpm db-dev:migrate           # apply migrations
+pnpm db:migrate               # apply migrations
 pnpm dev                      # dev server at http://localhost:5173
 ```
 
@@ -106,25 +106,26 @@ Then open it in Chrome or Edge and use the install icon in the address bar to in
 
 ## Scripts
 
-| Command                | What it does                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| `pnpm dev`             | Vite dev server with hot reload                                                                  |
-| `pnpm build`           | Production build into `.svelte-kit/output`                                                       |
-| `pnpm preview`         | Serve the production build from Node on port 4173 (`vite preview`)                               |
-| `pnpm check`           | Type-check (svelte-check)                                                                        |
-| `pnpm lint`            | Prettier check + ESLint                                                                          |
-| `pnpm format`          | Prettier write                                                                                   |
-| `pnpm gen:icons`       | Regenerate PWA icons from `static/icon.svg`                                                      |
-| `pnpm db-dev:generate` | Regenerate the Prisma client after editing the schema                                            |
-| `pnpm db-dev:migrate`  | `prisma migrate dev` on `DATABASE_URL`: apply migrations, or create one after editing the schema |
-| `pnpm db-dev:studio`   | Browse the database at `DATABASE_URL` in Prisma Studio                                           |
+| Command            | What it does                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Vite dev server with hot reload                                                                  |
+| `pnpm build`       | Production build into `.svelte-kit/output`                                                       |
+| `pnpm preview`     | Serve the production build from Node on port 4173 (`vite preview`)                               |
+| `pnpm check`       | Type-check (svelte-check)                                                                        |
+| `pnpm lint`        | Prettier check + ESLint                                                                          |
+| `pnpm format`      | Prettier write                                                                                   |
+| `pnpm gen:icons`   | Regenerate PWA icons from `static/icon.svg`                                                      |
+| `pnpm db:generate` | Regenerate the Prisma client after editing the schema                                            |
+| `pnpm db:migrate`  | `prisma migrate dev` on `DATABASE_URL`: apply migrations, or create one after editing the schema |
+| `pnpm db:studio`   | Browse the database at `DATABASE_URL` in Prisma Studio                                           |
 
 ## Database changes
 
 Edit `prisma/schema.prisma` (or regenerate Better Auth's models with `pnpm dlx auth@latest generate --output prisma/schema.prisma` after adding plugins), then:
 
 ```sh
-pnpm db-dev:migrate --name <change>   # writes prisma/migrations/<timestamp>_<change>/ and applies it locally
+pnpm db:migrate --name <change>   # writes prisma/migrations/<timestamp>_<change>/ and applies it locally
+pnpm db:generate                  # regenerate the client; Prisma 7's migrate dev no longer does this
 ```
 
 The app and the Prisma CLI both read `DATABASE_URL` from `.env` (the app via `src/env.ts`, the CLI via `settings/env.ts`, which validates it with [envalid](https://github.com/af/envalid)), so pointing at another database is a one-line change. New variables go in `src/env.ts` if the app reads them, and in `settings/env.ts` if a CLI or script does.

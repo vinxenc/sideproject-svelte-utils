@@ -6,7 +6,7 @@
 		{
 			"name": "db-studio",
 			"runtimeExecutable": "pnpm",
-			"runtimeArgs": ["db-dev:studio", "--port", "5555", "--browser", "none"],
+			"runtimeArgs": ["db:studio", "--port", "5555", "--browser", "none"],
 			"port": 5555
 		}
 	]
