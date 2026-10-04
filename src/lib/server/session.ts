@@ -12,9 +12,13 @@ export async function getUser(event: RequestEvent): Promise<Session['user'] | nu
 	// ponytail: keys cached until restart; refetch on unknown kid if key rotation is enabled.
 	// Only a valid response is cached, so a failed fetch is retried on the next request.
 	if (!jwks) {
-		const res = await event.fetch('/api/auth/jwks');
-		const body = res.ok ? await res.json() : null;
-		if (Array.isArray(body?.keys)) jwks = body;
+		try {
+			const res = await event.fetch('/api/auth/jwks');
+			const body = res.ok ? await res.json() : null;
+			if (Array.isArray(body?.keys)) jwks = body;
+		} catch {
+			// auth unreachable or malformed response: fall back to get-session below
+		}
 	}
 
 	// Access token: the signed session_data JWT, verified locally with the public keys.
