@@ -45,7 +45,6 @@ src/
     api/auth/[...all]/     Better Auth REST API (sign-in, sign-up, get-session, …)
     (guest)/               redirects signed-in users to /dashboard
       sign-in/  sign-up/   auth pages (shadcn blocks login-02, signup-02)
-  env.ts                   env var definitions (read via $app/env/private)
   hooks.server.ts          fills locals.user via lib/server/session.ts
   lib/
     server/
@@ -64,7 +63,7 @@ prisma/schema.prisma       Better Auth models (user, session, account, verificat
 prisma/migrations/         SQL migrations (prisma migrate dev)
 docker-compose.yml         local Postgres 18 for development
 prisma.config.ts           Prisma CLI config: DATABASE_URL from settings/env.ts
-settings/env.ts            env for tools outside SvelteKit: loads .env (dotenv), validates (envalid)
+settings/env.ts            all env vars (app via #settings/env, and CLIs): loads .env (dotenv), validates (envalid)
 static/                    manifest.webmanifest, icons, robots.txt
 components.json            shadcn-svelte config
 vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is chosen)
@@ -85,13 +84,25 @@ Requirements: Node 22.17+, pnpm 9+ and Docker (for the local Postgres).
 
 ```sh
 pnpm install                  # also generates the Prisma client
-cp .env.example .env          # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
-docker compose up -d --wait   # local Postgres on localhost:5432 (user/password/db: utilities)
+cp .env.example .env          # then set BETTER_AUTH_SECRET, see "Local .env" below
+docker compose up -d --wait   # Postgres on :5432, RustFS (S3) on :9000, console on :9001
 pnpm db:migrate               # apply migrations
 pnpm dev                      # dev server at http://localhost:5173
 ```
 
-`docker compose down` stops Postgres and keeps the data; `docker compose down -v` also wipes it.
+`docker compose down` stops Postgres and RustFS and keeps their data; `docker compose down -v` also wipes it.
+
+### Local .env
+
+Never commit `.env*` files other than `.env.example`, and keep real secrets out of `.env.example`: this repository is public.
+
+Every checkout and git worktree (including agent worktrees under `.claude/worktrees/`) shares the same Docker Postgres. Better Auth encrypts its signing key in that database's `jwks` table with `BETTER_AUTH_SECRET`, so **all of them must use the same secret**; a different one makes sign-in and sign-up fail with `Failed to decrypt private key`.
+
+To set up `.env` in a new checkout or worktree:
+
+1. `cp .env.example .env`. The other values already match `docker-compose.yml`.
+2. Copy the `BETTER_AUTH_SECRET` line from an existing checkout's `.env` (the main checkout or another worktree).
+3. Only if no checkout has one yet (a fresh database), generate it with `openssl rand -base64 32`. To change it later, delete the rows in the `jwks` table so Better Auth creates a new key; this signs everyone out.
 
 Auth endpoints live under `/api/auth/*` (e.g. `POST /api/auth/sign-up/email`). API docs: `/api/auth/reference` (Scalar UI), raw OpenAPI JSON: `/api/auth/open-api/generate-schema`, public signing keys: `/api/auth/jwks`.
 
@@ -128,7 +139,7 @@ pnpm db:migrate --name <change>   # writes prisma/migrations/<timestamp>_<change
 pnpm db:generate                  # regenerate the client; Prisma 7's migrate dev no longer does this
 ```
 
-The app and the Prisma CLI both read `DATABASE_URL` from `.env` (the app via `src/env.ts`, the CLI via `settings/env.ts`, which validates it with [envalid](https://github.com/af/envalid)), so pointing at another database is a one-line change. New variables go in `src/env.ts` if the app reads them, and in `settings/env.ts` if a CLI or script does.
+Every environment variable is defined once, in `settings/env.ts`: it loads `.env` (dotenv) and validates it with [envalid](https://github.com/af/envalid). Server code imports it as `#settings/env.js` (only from `src/lib/server/`, never from code that reaches the browser), and the Prisma CLI reads it through `prisma.config.ts`, so pointing at another database is a one-line change. Each variable has a `devDefault` matching `docker-compose.yml`; with `NODE_ENV=production` (`vite preview` and hosts) all of them must be set. Validation runs on first read, not on import, so `vite build` needs no env vars; keep `env.X` reads inside functions, never at module top level.
 
 ## Auth
 
