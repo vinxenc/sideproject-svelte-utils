@@ -1,5 +1,5 @@
-# Local development database. Start with `docker compose up -d --wait`; data persists in the
-# `pgdata` volume (`docker compose down -v` wipes it). Matches DATABASE_URL in .env.example.
+# Local development services. Start with `docker compose up -d --wait`; data persists in named
+# volumes (`docker compose down -v` wipes them). Matches the URLs and keys in .env.example.
 name: utilities
 
 services:
@@ -20,5 +20,66 @@ services:
       timeout: 5s
       retries: 15
 
+  # S3-compatible object storage for photos and videos. API on :9000, web console on :9001.
+  rustfs:
+    image: rustfs/rustfs:1.0.1
+    depends_on:
+      rustfs-permissions:
+        condition: service_completed_successfully
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: 'true'
+      RUSTFS_ACCESS_KEY: utilities
+      RUSTFS_SECRET_KEY: utilities-secret
+      # A single local volume isn't a production disk layout; RustFS refuses it without this.
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: 'true'
+    ports:
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
+    volumes:
+      - s3data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:9000/health']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # RustFS runs as UID 10001; a fresh named volume is owned by root.
+  rustfs-permissions:
+    image: alpine:3
+    volumes:
+      - s3data:/data
+    command: chown -R 10001:10001 /data
+    restart: 'no'
+
+  # Creates the `media` bucket and lets the dev/preview origins upload to it directly (presigned PUT).
+  rustfs-init:
+    image: amazon/aws-cli:2.31.0
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: utilities
+      AWS_SECRET_ACCESS_KEY: utilities-secret
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://rustfs:9000
+    entrypoint: ['sh', '-ec']
+    command:
+      - |
+        aws s3api head-bucket --bucket media 2>/dev/null || aws s3api create-bucket --bucket media
+        aws s3api put-bucket-cors --bucket media --cors-configuration '{
+          "CORSRules": [{
+            "AllowedOrigins": ["http://localhost:5173", "http://localhost:4173"],
+            "AllowedMethods": ["GET", "PUT", "HEAD"],
+            "AllowedHeaders": ["*"],
+            "ExposeHeaders": ["ETag"],
+            "MaxAgeSeconds": 3600
+          }]
+        }'
+    restart: 'no'
+
 volumes:
   pgdata:
+  s3data:
