@@ -19,7 +19,10 @@ const s3 = new AwsClient({
 
 // Path-style (`/bucket/key`) works on RustFS, R2 and S3 alike.
 function objectUrl(key: string) {
-	const path = key.split('/').map(encodeURIComponent).join('/');
+	const segments = key.split('/');
+	// new URL() resolves `.`/`..`, which would let a key escape the bucket or the user's prefix.
+	if (segments.some((s) => s === '.' || s === '..')) throw new Error(`Invalid object key: ${key}`);
+	const path = segments.map(encodeURIComponent).join('/');
 	return new URL(`/${S3_BUCKET}/${path}`, S3_ENDPOINT);
 }
 
