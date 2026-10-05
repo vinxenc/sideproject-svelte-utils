@@ -63,8 +63,7 @@ src/
 prisma/schema.prisma       Better Auth models (user, session, account, verification, jwks)
 prisma/migrations/         SQL migrations (prisma migrate dev)
 docker-compose.yml         local Postgres 18 for development
-prisma.config.ts           Prisma CLI config: DATABASE_URL from settings/env.ts
-settings/env.ts            env for tools outside SvelteKit: loads .env (dotenv), validates (envalid)
+prisma.config.ts           Prisma CLI config: loads .env (dotenv), DATABASE_URL from the environment
 static/                    manifest.webmanifest, icons, robots.txt
 components.json            shadcn-svelte config
 vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is chosen)
@@ -140,7 +139,7 @@ pnpm db:migrate --name <change>   # writes prisma/migrations/<timestamp>_<change
 pnpm db:generate                  # regenerate the client; Prisma 7's migrate dev no longer does this
 ```
 
-The app and the Prisma CLI both read `DATABASE_URL` from `.env` (the app via `src/env.ts`, the CLI via `settings/env.ts`, which validates it with [envalid](https://github.com/af/envalid)), so pointing at another database is a one-line change. New variables go in `src/env.ts` if the app reads them, and in `settings/env.ts` if a CLI or script does.
+The app and the Prisma CLI both read `DATABASE_URL` from `.env` (the app via `src/env.ts`, the CLI via `prisma.config.ts`, which loads `.env` with dotenv), so pointing at another database is a one-line change. Environment variables are defined in `src/env.ts`; a CLI or script outside SvelteKit reads `process.env` after `import 'dotenv/config'`.
 
 ## Auth
 
