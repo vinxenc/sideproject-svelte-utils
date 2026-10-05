@@ -25,6 +25,3 @@ vite.config.ts.timestamp-*
 
 # Generated Prisma client
 /src/lib/server/prisma
-
-# Local planning notes
-/docs
