@@ -1,23 +1,26 @@
 import { AwsClient } from 'aws4fetch';
-import { env } from '#settings/env.js';
+import {
+	S3_ACCESS_KEY_ID,
+	S3_BUCKET,
+	S3_ENDPOINT,
+	S3_REGION,
+	S3_SECRET_ACCESS_KEY
+} from '$app/env/private';
 
 // Object storage for media: any S3-compatible service (RustFS locally, R2/S3 in production).
 // The bucket stays private; browsers only ever get short-lived presigned URLs.
-let client: AwsClient | undefined;
-// Created on first use, so importing this module (e.g. during `vite build`) reads no env.
-const s3 = () =>
-	(client ??= new AwsClient({
-		accessKeyId: env.S3_ACCESS_KEY_ID,
-		secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-		service: 's3',
-		region: env.S3_REGION,
-		retries: 2
-	}));
+const s3 = new AwsClient({
+	accessKeyId: S3_ACCESS_KEY_ID,
+	secretAccessKey: S3_SECRET_ACCESS_KEY,
+	service: 's3',
+	region: S3_REGION,
+	retries: 2
+});
 
 // Path-style (`/bucket/key`) works on RustFS, R2 and S3 alike.
 function objectUrl(key: string) {
 	const path = key.split('/').map(encodeURIComponent).join('/');
-	return new URL(`/${env.S3_BUCKET}/${path}`, env.S3_ENDPOINT);
+	return new URL(`/${S3_BUCKET}/${path}`, S3_ENDPOINT);
 }
 
 async function presign(
@@ -29,7 +32,7 @@ async function presign(
 	const url = objectUrl(key);
 	url.searchParams.set('X-Amz-Expires', String(expiresIn));
 	// allHeaders: aws4fetch skips content-type by default; signing it pins the upload's type.
-	const signed = await s3().sign(url, {
+	const signed = await s3.sign(url, {
 		method,
 		headers,
 		aws: { signQuery: true, allHeaders: true }
@@ -52,7 +55,7 @@ export function presignGet(key: string, expiresIn = 60 * 60) {
 
 /** Size and type of an object, or `null` if it doesn't exist. */
 export async function head(key: string) {
-	const res = await s3().fetch(objectUrl(key), { method: 'HEAD' });
+	const res = await s3.fetch(objectUrl(key), { method: 'HEAD' });
 	if (res.status === 404) return null;
 	if (!res.ok) throw new Error(`S3 HEAD ${key} failed: ${res.status}`);
 	return {
@@ -65,7 +68,7 @@ export async function head(key: string) {
 export async function remove(...keys: string[]) {
 	await Promise.all(
 		keys.map(async (key) => {
-			const res = await s3().fetch(objectUrl(key), { method: 'DELETE' });
+			const res = await s3.fetch(objectUrl(key), { method: 'DELETE' });
 			if (!res.ok && res.status !== 404) throw new Error(`S3 DELETE ${key} failed: ${res.status}`);
 		})
 	);

@@ -7,7 +7,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview --port 4173 --strictPort",
-		"prepare": "svelte-kit sync || echo '' && NODE_ENV=development prisma generate",
+		"prepare": "svelte-kit sync || echo '' && prisma generate",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
@@ -56,7 +56,6 @@
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",
-		"#lib/*": "./src/lib/*",
-		"#settings/*": "./settings/*"
+		"#lib/*": "./src/lib/*"
 	}
 }

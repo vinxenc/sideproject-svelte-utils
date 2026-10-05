@@ -45,6 +45,7 @@ src/
     api/auth/[...all]/     Better Auth REST API (sign-in, sign-up, get-session, …)
     (guest)/               redirects signed-in users to /dashboard
       sign-in/  sign-up/   auth pages (shadcn blocks login-02, signup-02)
+  env.ts                   env var definitions (read via $app/env/private)
   hooks.server.ts          fills locals.user via lib/server/session.ts
   lib/
     server/
@@ -63,7 +64,7 @@ prisma/schema.prisma       Better Auth models (user, session, account, verificat
 prisma/migrations/         SQL migrations (prisma migrate dev)
 docker-compose.yml         local Postgres 18 for development
 prisma.config.ts           Prisma CLI config: DATABASE_URL from settings/env.ts
-settings/env.ts            all env vars (app via #settings/env, and CLIs): loads .env (dotenv), validates (envalid)
+settings/env.ts            env for tools outside SvelteKit: loads .env (dotenv), validates (envalid)
 static/                    manifest.webmanifest, icons, robots.txt
 components.json            shadcn-svelte config
 vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is chosen)
@@ -139,7 +140,7 @@ pnpm db:migrate --name <change>   # writes prisma/migrations/<timestamp>_<change
 pnpm db:generate                  # regenerate the client; Prisma 7's migrate dev no longer does this
 ```
 
-Every environment variable is defined once, in `settings/env.ts`: it loads `.env` (dotenv) and validates it with [envalid](https://github.com/af/envalid). Server code imports it as `#settings/env.js` (only from `src/lib/server/`, never from code that reaches the browser), and the Prisma CLI reads it through `prisma.config.ts`, so pointing at another database is a one-line change. Each variable has a `devDefault` matching `docker-compose.yml`; with `NODE_ENV=production` (`vite preview` and hosts) all of them must be set. Validation runs on first read, not on import, so `vite build` needs no env vars; keep `env.X` reads inside functions, never at module top level.
+The app and the Prisma CLI both read `DATABASE_URL` from `.env` (the app via `src/env.ts`, the CLI via `settings/env.ts`, which validates it with [envalid](https://github.com/af/envalid)), so pointing at another database is a one-line change. New variables go in `src/env.ts` if the app reads them, and in `settings/env.ts` if a CLI or script does.
 
 ## Auth
 

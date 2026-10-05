@@ -1,11 +1,11 @@
 import { getCookieCache, getSessionCookie } from 'better-auth/cookies';
 import type { RequestEvent } from '@sveltejs/kit';
-import type { Auth } from './auth.js';
+import type { auth } from './auth.js';
 
 // App side of auth: verifies the access token itself and only calls the auth API
 // (over HTTP) for public keys and refreshes, so it keeps working once auth moves to
 // its own service (point these paths at that service's URL).
-type Session = Auth['$Infer']['Session'];
+type Session = typeof auth.$Infer.Session;
 let jwks: { keys: Record<string, string>[] } | undefined;
 
 export async function getUser(event: RequestEvent): Promise<Session['user'] | null> {
