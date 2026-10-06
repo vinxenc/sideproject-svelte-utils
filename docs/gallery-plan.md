@@ -26,7 +26,7 @@ Decisions: per-user uploads · S3-compatible storage (RustFS locally) via `aws4f
 
 ### Phase 3: Upload path
 
-- [x] `POST /api/media`: requires a session, checks type and size against the allowlist, creates a `PENDING` row, returns presigned PUT URLs for the original and the thumbnail
+- [x] `POST /api/media`: requires a session, checks type and size against the allowlist, creates a `PENDING` row, returns presigned PUT URLs for the original and the thumbnail, which pin the content type and the exact byte length
 - [x] `POST /api/media/[id]/complete`: requires ownership, `HEAD` confirms the size matches, sets `READY` and `hasThumb`
 - [x] `src/lib/media/prepare.ts`:
   - [x] Image thumbnail: `createImageBitmap` with EXIF orientation, 1024 px JPEG (the mosaic shows some tiles at 2x2, which needs the extra pixels to stay sharp; JPEG because every browser can encode it, where Safari can't do WebP)

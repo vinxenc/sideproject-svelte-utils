@@ -1,11 +1,8 @@
 import { error, json } from '@sveltejs/kit';
 import { prisma } from '#lib/server/db.js';
-import { NO_STORE, originalKey, thumbKey, toItem } from '#lib/server/media.js';
+import { MAX_THUMB_BYTES, NO_STORE, originalKey, thumbKey, toItem } from '#lib/server/media.js';
 import { head, remove } from '#lib/server/storage.js';
 import type { RequestHandler } from './$types';
-
-// A thumbnail is 1024 px at most; anything much bigger is the thumbnail slot being used as free storage.
-const MAX_THUMB_BYTES = 2 * 1024 * 1024;
 
 export const POST: RequestHandler = async ({ locals, params }) => {
 	if (!locals.user) error(401, 'Sign in required');
@@ -19,7 +16,7 @@ export const POST: RequestHandler = async ({ locals, params }) => {
 	const [original, thumb] = await Promise.all([head(originalKey(media)), head(thumbKey(media))]);
 	if (!original) error(409, 'The file has not been uploaded');
 	if (original.size !== media.size) {
-		// A presigned PUT can't be bound to a size, so a client can send more or less than it declared.
+		// The signed upload URL makes the storage refuse any other length; this catches a store that doesn't.
 		await remove(originalKey(media), thumbKey(media));
 		await prisma.media.delete({ where: { id: media.id } });
 		error(422, 'The uploaded file does not match its declared size');

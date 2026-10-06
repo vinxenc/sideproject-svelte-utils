@@ -6,8 +6,8 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 
 **Requests used below**
 
-- Create an upload: `POST /api/media` with JSON `{ name, type, size, takenAt?, width?, height?, duration?, thumb? }`. Answers 201 with `{ id, contentType, original, thumb }`: `original` and `thumb` are presigned `PUT` URLs (`thumb` is `null` unless `thumb` was `true`).
-- Upload the bytes: `PUT` each URL with the matching `Content-Type`.
+- Create an upload: `POST /api/media` with JSON `{ name, type, size, takenAt?, width?, height?, duration?, thumb? }`. Answers 201 with `{ id, contentType, original, thumb }`: `original` and `thumb` are presigned `PUT` URLs (`thumb` is `null` unless the request's `thumb` is the thumbnail's size in bytes: a whole number from 1 to 2 MiB).
+- Upload the bytes: `PUT` each URL with the matching `Content-Type` and exactly the declared number of bytes (`size` for the original, `thumb` for the thumbnail). Both are signed into the URL.
 - Finish: `POST /api/media/<id>/complete` answers with the item.
 - List: `GET /api/media` (60 per page, newest `takenAt` first) answers `{ items, nextCursor }`; continue with `?cursor=<nextCursor>`.
 - Files: `GET /api/media/<id>/original` and `/thumb` answer `302` with a presigned `GET` URL.
@@ -26,9 +26,9 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 
 **Steps and expected results, in order**
 
-1. `POST /api/media` for `happy.jpg`: type `image/jpeg`, size 5000, `takenAt` `2024-05-01T10:00:00.000Z`, width 4000, height 3000, `thumb: true`. Expect 201, an `id`, `contentType` `image/jpeg`, header `Cache-Control: private, no-store`, an `original` URL on the storage origin whose path is `/media/<userId>/<id>/original`, and a `thumb` URL whose path ends `<userId>/<id>/thumb`.
-2. `PUT` 5000 random bytes to `original` with `Content-Type: text/html`: expect **403** (the type is signed into the URL). Repeat with `image/jpeg`: expect 2xx.
-3. `PUT` 800 random bytes to `thumb` with `Content-Type: image/webp`: expect **403** (thumbnails are always `image/jpeg`). Repeat with `image/jpeg`: expect 2xx.
+1. `POST /api/media` for `happy.jpg`: type `image/jpeg`, size 5000, `takenAt` `2024-05-01T10:00:00.000Z`, width 4000, height 3000, `thumb: 800`. Expect 201, an `id`, `contentType` `image/jpeg`, header `Cache-Control: private, no-store`, an `original` URL on the storage origin whose path is `/media/<userId>/<id>/original`, and a `thumb` URL whose path ends `<userId>/<id>/thumb`.
+2. `PUT` 5000 random bytes to `original` with `Content-Type: text/html`: expect **403** (the type is signed into the URL). Repeat with `image/jpeg` but 4999 and then 5001 bytes: expect **403** (the length is signed too). Repeat with `image/jpeg` and exactly 5000 bytes: expect 2xx.
+3. `PUT` 800 random bytes to `thumb` with `Content-Type: image/webp`: expect **403** (thumbnails are always `image/jpeg`). Repeat with `image/jpeg` and 801 bytes: expect **403**. Repeat with `image/jpeg` and exactly 800 bytes: expect 2xx.
 4. While the item is still pending: `GET /api/media` does not list it, and `GET /api/media/<id>/original` answers 404.
 5. `POST /api/media/<id>/complete`: expect 200 and an item with `hasThumb: true`, `kind: "IMAGE"`, `name: "happy.jpg"`, `duration: null`, `takenAt: "2024-05-01T10:00:00.000Z"` and **exactly these six keys**: `id`, `kind`, `name`, `duration`, `takenAt`, `hasThumb`.
 6. In the database the row has width 4000, height 3000, size 5000 and contentType `image/jpeg` (they are stored although the item JSON omits them).
@@ -38,12 +38,14 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 
 ## API-03 Completing: missing thumbnail, wrong size, missing upload
 
-| Situation                                                                                               | Expected                                                                                                |
-| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Create without `thumb`, upload only the original, complete                                              | `thumb` was `null`; complete gives `hasThumb: false`; `GET .../thumb` is 404; `GET .../original` is 302 |
-| Create with size 100 and `thumb: true`, upload 200 bytes (more than declared) and a thumbnail, complete | 422; the row is deleted and its objects are removed from the bucket; completing again is 404            |
-| Create, upload nothing, complete                                                                        | 409; the row stays pending so a client can retry                                                        |
-| Create with `thumb: true`, upload a 10 byte original and a thumbnail larger than 2 MB, complete         | 200 with `hasThumb: false`; the oversized thumbnail object is removed                                   |
+| Situation                                                                                                                                                       | Expected                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create without `thumb`, upload only the original, complete                                                                                                      | `thumb` was `null`; complete gives `hasThumb: false`; `GET .../thumb` is 404; `GET .../original` is 302                                                        |
+| Create with size 100, `PUT` 200 bytes (more than declared) to `original`                                                                                        | 403 from the storage: nothing is stored, so completing answers 409                                                                                             |
+| Create with size 100, then put 200 bytes at `<userId>/<id>/original` straight into the bucket with the storage credentials (bypassing the signed URL), complete | 422; the row is deleted and its objects are removed from the bucket; completing again is 404 (this guard only matters for a store that ignores signed lengths) |
+| Create, upload nothing, complete                                                                                                                                | 409; the row stays pending so a client can retry                                                                                                               |
+| Create with `thumb` set to 2 MiB + 1                                                                                                                            | 201 with `thumb: null`: no upload URL is issued for a thumbnail that big                                                                                       |
+| Create with a small `thumb`, upload a 10 byte original, then put a thumbnail larger than 2 MiB at `<userId>/<id>/thumb` straight into the bucket, complete      | 200 with `hasThumb: false`; the oversized thumbnail object is removed                                                                                          |
 
 ## API-04 Validation of `POST /api/media`
 
@@ -51,7 +53,7 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 
 **Accepted (201) with these canonical types:** an image of exactly 50 MB (`image/jpeg`); a video of exactly 1 GB (`video/mp4`); empty type with `IMG_1.HEIC` (`image/heic`); empty type with `clip.MOV` (`video/quicktime`); type `video/mp4; codecs=avc1` (normalised to `video/mp4`).
 
-**Tolerated:** `thumb` set to anything other than boolean `true` (`"yes"`, `1`, `"image/webp"`, `null`, `{}`) answers 201 with `thumb: null`; the old field `thumbType` is ignored the same way. After upload and complete: a `takenAt` of `2999-01-01` is clamped to about now; an unparsable `takenAt` becomes about now; width -4 and height 1.5 are stored as null.
+**Tolerated:** `thumb` set to anything other than a whole number from 1 to 2 MiB (`true`, `"yes"`, `0`, `-1`, `1.5`, 2 MiB + 1, `"image/webp"`, `null`, `{}`) answers 201 with `thumb: null`; `thumb` set to 1 or to 2 MiB gives a thumbnail URL. The old field `thumbType` is ignored the same way. After upload and complete: a `takenAt` of `2999-01-01` is clamped to about now; an unparsable `takenAt` becomes about now; width -4 and height 1.5 are stored as null.
 
 ## API-05 Isolation between accounts
 

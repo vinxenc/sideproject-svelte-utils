@@ -44,7 +44,7 @@ The grid once it has items: layout, tiles, image loading, infinite scroll and ho
 
 ## GAL-05 A thumbnail that is not an image
 
-**Steps:** create an item whose stored thumbnail is garbage: create an upload with `thumb: true`, `PUT` 500 random bytes to both URLs (the original with its type, the thumbnail as `image/jpeg`), complete it, then re-enter `Photo & video`.
+**Steps:** create an item whose stored thumbnail is garbage: create an upload with `size` 500 and `thumb` 500, `PUT` 500 random bytes to both URLs (the original with its type, the thumbnail as `image/jpeg`), complete it, then re-enter `Photo & video`.
 
 **Expected:** the tile shows the grey icon placeholder (not a broken-image icon). Opening it in the viewer works; because the original is garbage too, the viewer shows its "can't show the original" panel (LBX-07).
 

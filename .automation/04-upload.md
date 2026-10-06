@@ -47,7 +47,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 - The round add button shows a spinner and its accessible name is `Uploading photos and videos`.
 - Each card moves through `Waiting`, `Preparing`, `Uploading N%` (with a progress bar) and `Finishing` to `Added · <size>` with a check mark over the preview. The remove buttons disappear while a card is in flight and do not come back on a finished card.
 - **At most 3 originals are uploading at the same moment** (the in-flight count never exceeds 3).
-- Every thumbnail upload is a `PUT` with `Content-Type: image/jpeg`. The `POST /api/media` bodies carry `thumb: true` for the six files with previews and `thumb: false` for the three that cannot be decoded; none carries a `thumbType` field.
+- Every thumbnail upload is a `PUT` with `Content-Type: image/jpeg`. The `POST /api/media` bodies carry `thumb` set to the thumbnail's size in bytes for the six files with previews and no `thumb` for the three that cannot be decoded; none carries a `thumbType` field. Every `PUT` sends exactly the number of bytes declared for it (the file's size, the thumbnail's size).
 
 **Expected at the end**
 

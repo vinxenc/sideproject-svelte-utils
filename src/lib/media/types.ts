@@ -65,12 +65,12 @@ export type MediaItem = {
 
 export type MediaPage = { items: MediaItem[]; nextCursor: string | null };
 
-/** What `POST /api/media` returns: where to PUT the bytes. Each URL signs the Content-Type it must be sent with. */
+/** What `POST /api/media` returns: where to PUT the bytes. Each URL signs the Content-Type and the byte length it must be sent with. */
 export type UploadTicket = {
 	id: string;
 	/** Content-Type for the original (the canonical type, not whatever the browser reported). */
 	contentType: string;
 	original: string;
-	/** Only present when the request announced a `thumb`; PUT it with `THUMB_TYPE`. */
+	/** Only present when the request announced the thumbnail's size in `thumb`; PUT exactly that many bytes with `THUMB_TYPE`. */
 	thumb: string | null;
 };

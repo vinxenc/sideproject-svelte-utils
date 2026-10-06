@@ -2,7 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { checkMedia, THUMB_TYPE } from '#lib/media/types.js';
 import type { MediaPage, UploadTicket } from '#lib/media/types.js';
 import { prisma } from '#lib/server/db.js';
-import { NO_STORE, originalKey, thumbKey, toItem } from '#lib/server/media.js';
+import { MAX_THUMB_BYTES, NO_STORE, originalKey, thumbKey, toItem } from '#lib/server/media.js';
 import type { Media } from '#lib/server/prisma/client.js';
 import { presignPut, remove } from '#lib/server/storage.js';
 import type { RequestHandler } from './$types';
@@ -74,6 +74,9 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 
 const dimension = (v: unknown) =>
 	typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= 100_000 ? v : null;
+// The thumbnail's size in bytes, or null when none is announced (or it is too big to accept).
+const thumbBytes = (v: unknown) =>
+	typeof v === 'number' && Number.isInteger(v) && v > 0 && v <= MAX_THUMB_BYTES ? v : null;
 const seconds = (v: unknown) =>
 	typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1_000_000 ? v : null;
 
@@ -111,9 +114,10 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 			takenAt: takenAtOf(body.takenAt)
 		}
 	});
+	const thumbSize = thumbBytes(body.thumb);
 	const [original, thumb] = await Promise.all([
-		presignPut(originalKey(media), checked.contentType),
-		body.thumb === true ? presignPut(thumbKey(media), THUMB_TYPE) : null
+		presignPut(originalKey(media), checked.contentType, size),
+		thumbSize ? presignPut(thumbKey(media), THUMB_TYPE, thumbSize) : null
 	]);
 	const ticket: UploadTicket = { id: media.id, contentType: checked.contentType, original, thumb };
 	return json(ticket, { status: 201, headers: NO_STORE });

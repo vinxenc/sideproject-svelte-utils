@@ -10,7 +10,7 @@ Before thumbnails were always JPEG, the app stored WebP thumbnails. Those object
 
 **Steps**
 
-1. Create a **new** item without going through the dialog: create the upload with `thumb: true`, `PUT` a small original (a PNG) and a small JPEG thumbnail with their types, and complete it (see API-02). Swap the object right after completing it, before the item has ever been shown, so no earlier copy of the thumbnail can be in the browser.
+1. Create a **new** item without going through the dialog: create the upload with `thumb` set to the thumbnail's size in bytes, `PUT` a small original (a PNG) and a small JPEG thumbnail with their types, and complete it (see API-02). Swap the object right after completing it, before the item has ever been shown, so no earlier copy of the thumbnail can be in the browser.
 2. Replace the item's stored thumbnail object (`<userId>/<id>/thumb`) with a real 400 × 300 WebP image, stored with `Content-Type: image/webp`. Use any S3 client with the local RustFS credentials from `docker-compose.yml` or `.env` (for example the `amazon/aws-cli` image the compose file uses). Write only under the QA account's own prefix.
 3. Re-enter `Photo & video` and find the tile.
 

@@ -88,7 +88,7 @@ export async function uploadMedia(
 			width: prepared.width,
 			height: prepared.height,
 			duration: prepared.duration,
-			thumb: prepared.thumb !== null
+			thumb: prepared.thumb?.size
 		});
 
 		onStage('uploading', 0);

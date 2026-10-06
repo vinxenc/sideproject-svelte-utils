@@ -5,6 +5,9 @@ import type { Media } from './prisma/client.js';
 export const originalKey = (m: Pick<Media, 'userId' | 'id'>) => `${m.userId}/${m.id}/original`;
 export const thumbKey = (m: Pick<Media, 'userId' | 'id'>) => `${m.userId}/${m.id}/thumb`;
 
+// A thumbnail is 1024 px at most; anything much bigger is the thumbnail slot being used as free storage.
+export const MAX_THUMB_BYTES = 2 * 1024 * 1024;
+
 /** Cache-Control for API responses holding one user's data; the service worker honours no-store. */
 export const NO_STORE = { 'cache-control': 'private, no-store' };
 
