@@ -33,8 +33,9 @@
 	}
 
 	function onkeydown(event: KeyboardEvent) {
-		// Arrow keys seek inside a focused video.
+		// Arrow keys seek inside a focused video, and with a modifier they belong to the browser (Alt+Left is Back).
 		if (openId === null || event.target instanceof HTMLVideoElement) return;
+		if (event.altKey || event.ctrlKey || event.metaKey) return;
 		if (event.key === 'ArrowLeft') go(-1);
 		else if (event.key === 'ArrowRight') go(1);
 	}
@@ -94,8 +95,8 @@
 							src="/api/media/{item.id}/original"
 						></video>
 					{:else}
-						<!-- The thumbnail (already cached by the grid) stands in, under a loading overlay,
-						     until the much larger original has arrived. -->
+						<!-- The small thumbnail stands in, under a loading overlay, until the much larger original
+						     has arrived. -->
 						<MediaImage
 							src="/api/media/{item.id}/original"
 							alt={item.name}

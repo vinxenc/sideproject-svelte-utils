@@ -4,7 +4,7 @@
 export type MediaKind = 'IMAGE' | 'VIDEO';
 
 const MB = 1024 * 1024;
-export const MAX_BYTES: Record<MediaKind, number> = { IMAGE: 50 * MB, VIDEO: 1024 * MB };
+const MAX_BYTES: Record<MediaKind, number> = { IMAGE: 50 * MB, VIDEO: 1024 * MB };
 
 // Canonical MIME type, its kind, and the extensions that identify it when the browser reports no type.
 const TYPES: [type: string, kind: MediaKind, extensions: string[]][] = [
@@ -28,8 +28,7 @@ const TYPE_BY_EXTENSION = new Map<string, string>(
 /** Thumbnails and video posters are always JPEG, the one format every browser can encode. */
 export const THUMB_TYPE = 'image/jpeg';
 
-export type MediaCheck =
-	{ ok: true; contentType: string; kind: MediaKind } | { ok: false; error: string };
+type MediaCheck = { ok: true; contentType: string; kind: MediaKind } | { ok: false; error: string };
 
 /** Whether a file is an allowed photo or video, and its canonical content type. */
 export function checkMedia(file: { name: string; type: string; size: number }): MediaCheck {

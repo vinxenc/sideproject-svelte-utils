@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { prisma } from '#lib/server/db.js';
-import { originalKey, thumbKey } from '#lib/server/media.js';
+import { NO_STORE, originalKey, thumbKey } from '#lib/server/media.js';
 import { presignGet } from '#lib/server/storage.js';
 import type { RequestHandler } from './$types';
 
@@ -21,10 +21,7 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 		variant === 'thumb' ? thumbKey(media) : originalKey(media),
 		URL_TTL_SECONDS
 	);
-	// Cached for half the URL's life, so scrolling back through the grid reuses the signed URL
-	// (and with it the browser's cached image) instead of signing a fresh, uncacheable one each time.
-	return new Response(null, {
-		status: 302,
-		headers: { location: url, 'cache-control': `private, max-age=${URL_TTL_SECONDS / 2}` }
-	});
+	// Never cached: the ownership check above must run on every request. A cached redirect would be
+	// reused by another account in the same browser, and would outlive the item it points to.
+	return new Response(null, { status: 302, headers: { location: url, ...NO_STORE } });
 };

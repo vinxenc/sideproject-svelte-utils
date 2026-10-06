@@ -60,7 +60,7 @@ class Uploads {
 		return () => {
 			this.#onuploaded = undefined;
 			this.open = false;
-			if (!this.uploading) this.reset();
+			if (!this.uploading) this.#reset();
 		};
 	}
 
@@ -138,10 +138,10 @@ class Uploads {
 	/** Closing while uploads run keeps them going; otherwise the selection is dropped. */
 	close() {
 		this.open = false;
-		if (!this.uploading) this.reset();
+		if (!this.uploading) this.#reset();
 	}
 
-	reset() {
+	#reset() {
 		this.rows.forEach(release);
 		this.rows = [];
 		this.#added = 0;
@@ -172,7 +172,7 @@ class Uploads {
 					}
 				: undefined
 		});
-		if (!mounted) this.reset();
+		if (!mounted) this.#reset();
 	}
 }
 
