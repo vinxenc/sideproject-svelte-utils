@@ -2,7 +2,7 @@
 
 The HTTP contract behind the gallery. These cases need no page interaction. File bytes go straight to the storage origin with presigned URLs, so a plain HTTP client can upload them too.
 
-**Needs:** SET-01 to SET-04 (the preview is running). Use **two QA accounts created just for this file**, account A and account B, each driven by a plain HTTP client with its own cookie jar (sign up with `POST /api/auth/sign-up/email`, which also signs that client in; send an `Origin: http://localhost:4173` header). Do **not** use the browser or the account from SET-06 here: these cases leave media rows, seeded rows and pending uploads behind, which would break the "no media" starting point of [03-empty-and-loading.md](03-empty-and-loading.md) and the item counts of [04-upload.md](04-upload.md), and signing up from the browser would replace its session. API-06 and API-08 also write database rows directly (see "Seeding" in [01-test-data.md](01-test-data.md)), for account A only. Give both accounts `qa-…@example.test` emails; they are deleted in [10-cleanup.md](10-cleanup.md) (or right at the end of this file if you prefer, see CLN-02 for how).
+**Needs:** SET-01 to SET-04 (the preview is running). Use **two QA accounts created just for this file**, account A and account B, each driven by a plain HTTP client with its own cookie jar (sign up with `POST /api/auth/sign-up/email`, which also signs that client in; send an `Origin: http://localhost:4173` header). Do **not** use the browser or the account from SET-06 here: these cases leave media rows, seeded rows and pending uploads behind, which would break the "no media" starting point of [03-empty-and-loading.md](03-empty-and-loading.md) and the item counts of [04-upload.md](04-upload.md), and signing up from the browser would replace its session. API-06 and API-08 also write database rows directly (see "Seeding" in [01-test-data.md](01-test-data.md)), for account A only. Give both accounts `qa-…@example.test` emails; write down both user ids (from the sign-up responses): [10-cleanup.md](10-cleanup.md) deletes exactly those.
 
 **Requests used below**
 
@@ -34,7 +34,7 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 6. In the database the row has width 4000, height 3000, size 5000 and contentType `image/jpeg` (they are stored although the item JSON omits them).
 7. Completing again answers 404 (the row is no longer pending).
 8. `GET /api/media` returns exactly this item with `nextCursor: null` and `Cache-Control: private, no-store`.
-9. For `thumb` and `original`: do not follow the redirect automatically. Expect 302, a `Location` on the storage origin and bucket, and `Cache-Control: private, max-age=<number>`. Fetching the `Location` returns exactly the bytes uploaded, with `Content-Type: image/jpeg`.
+9. For `thumb` and `original`: do not follow the redirect automatically. Expect 302, a `Location` on the storage origin and bucket, and `Cache-Control: private, no-store` (the redirect is never cached, so the ownership check runs on every request). Fetching the `Location` returns exactly the bytes uploaded, with `Content-Type: image/jpeg`.
 
 ## API-03 Completing: missing thumbnail, wrong size, missing upload
 
@@ -93,4 +93,6 @@ A can still read its own item (302).
 
 **Steps:** create an upload, send its original and thumbnail, never complete it, and set its `createdAt` back 25 hours in the database. Also create a second, fresh pending upload. Then request the first page `GET /api/media`.
 
-**Expected:** the 25-hour-old row and both of its objects are gone; the fresh pending row is still there. Repeat with another 25-hour-old row and request a page with `?cursor=`: that row is **not** purged (only the first page does it).
+**Expected:** the 25-hour-old row and both of its objects are gone; the fresh pending row is still there.
+
+**Then, for the cursor path:** keep the `nextCursor` that this first-page request returned (account A has more than 60 READY items after API-06; run API-06 first or seed 70 placeholders). Only now create another pending upload and set its `createdAt` back 25 hours, then request `GET /api/media?cursor=<that nextCursor>`. That row is **not** purged: only a request without a cursor cleans up. Do not use an empty `?cursor=`: an empty value counts as no cursor and would purge.

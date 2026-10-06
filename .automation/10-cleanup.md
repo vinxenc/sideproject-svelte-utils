@@ -1,6 +1,6 @@
 # 10 · Cleanup
 
-Removes everything the run created. Always run it, also after failures or when the run was interrupted (a second run finds the leftovers by the QA email pattern).
+Removes everything this run created, and only that. Always run it, also after failures. Accounts left behind by an earlier or a concurrent run are not this run's to delete: list them in the report and leave them unless the user confirms.
 
 ## CLN-01 Page state
 
@@ -8,18 +8,19 @@ Removes everything the run created. Always run it, also after failures or when t
 
 **Expected:** no session (`GET /api/auth/get-session` returns `null`), no QA data left in the origin's storage.
 
-## CLN-02 Delete the QA accounts and their media
+## CLN-02 Delete the accounts this run created, and their media
 
-**Safety:** the only thing that may be deleted is a user whose email matches `qa-%@example.test` (SQL `like`) and what belongs to it. Show the list first and check it by eye: if a single address in it is not a throwaway one, stop.
+**Safety:** delete only the user ids this run recorded: the browser account from SET-06 and the two accounts of [02-api.md](02-api.md). Each of them must also have an email that matches `qa-%@example.test` (SQL `like`) as a second guard; if one does not, stop. Do not delete by pattern alone.
 
 **Steps**
 
-1. List the users whose email matches `qa-%@example.test` (id and email).
-2. Delete those users from the database. Their sessions, accounts, media rows and albums go with them (cascade).
+1. Collect the ids this run recorded and read their emails back from the database. Show the list.
+2. Delete exactly those users from the database. Their sessions, accounts, media rows and albums go with them (cascade).
 3. For each deleted user id, delete every object in the `media` bucket under the prefix `<userId>/` (original and thumbnail objects). Use an S3 client with the local RustFS credentials; the bucket is private.
 4. Count the users, the rows in `media` and the objects in the bucket again.
+5. List any other user whose email matches `qa-%@example.test`. Report them as leftovers of another run; delete them only if the user says so.
 
-**Expected:** no user with a `qa-…@example.test` email remains, and the three counts equal the baseline recorded in SET-01. The owner's own account, its media and its objects are untouched.
+**Expected:** none of this run's accounts remains, and the three counts equal the baseline recorded in SET-01 (leftovers of other runs were already counted there). The owner's own account, its media and its objects are untouched.
 
 ## CLN-03 Helper processes
 

@@ -18,7 +18,7 @@ The cases describe the app as built through Phase 4 of [docs/gallery-plan.md](..
 
 - **Production preview on port 4173 only.** Before starting, stop whatever is _listening_ on 4173 and 5173 (listeners only, never a browser's own connections), then start the preview. Never use another port and never run `pnpm dev` for these cases.
 - **Throwaway accounts only.** Every write (sign-up, upload) uses a QA account made for this run, with an email like `qa-<label>-<8 random hex>@example.test`. This is a real browser on a real machine, so it may already be signed in to the app as the owner's own account. Before the first write, look at who is signed in (`GET /api/auth/get-session` returns the current user). If it is not a `qa-…@example.test` address, stop and ask the user. Never test on a real account and never touch its media.
-- **Delete only what you created:** QA users matching that email pattern, their media rows and their objects in the bucket. Nothing else, ever.
+- **Delete only what you created:** the QA accounts this run made (keep their ids), their media rows and their objects in the bucket. A `qa-…` account you did not create (an earlier or a concurrent run) is not yours: report it and never delete it without the user's say-so. Nothing else, ever.
 - Do not print passwords or anything from `.env`. Do not change app code or commit anything while testing; report failures instead.
 - Everything runs against the local Docker services (Postgres and RustFS), see [00-setup.md](00-setup.md).
 

@@ -36,11 +36,11 @@ The grid once it has items: layout, tiles, image loading, infinite scroll and ho
 - While nothing arrives, every tile that has a thumbnail shows a pulsing skeleton with a spinner on top; the `<img>` is invisible (opacity 0) and its wrapper is marked busy (`aria-busy="true"`).
 - With the real images, each tile ends with the image fully visible (opacity 1), no spinner left and `aria-busy="false"`.
 
-## GAL-04 Cached images and re-entering the page
+## GAL-04 Re-entering the page
 
 **Steps:** leave `Photo & video` for `Home` and come back, three times, waiting about a second each time.
 
-**Expected:** after every return all thumbnails reach the loaded state (none stuck with a skeleton or a spinner) although they now come from the browser cache; the number of tiles is the same each time (no duplicates, no missing tiles). A new list request is made on each return.
+**Expected:** after every return all thumbnails reach the loaded state (none stuck with a skeleton or a spinner), whether the browser serves them from its cache or loads them again; the number of tiles is the same each time (no duplicates, no missing tiles). A new list request is made on each return, and every thumbnail asks `/api/media/<id>/thumb` again, because that redirect is never cached.
 
 ## GAL-05 A thumbnail that is not an image
 
