@@ -34,7 +34,8 @@ async function presign(
 ) {
 	const url = objectUrl(key);
 	url.searchParams.set('X-Amz-Expires', String(expiresIn));
-	// allHeaders: aws4fetch skips content-type by default; signing it pins the upload's type.
+	// allHeaders: aws4fetch leaves content-type and content-length unsigned by default; signing them
+	// pins the upload's type and its size.
 	const signed = await s3.sign(url, {
 		method,
 		headers,
@@ -44,11 +45,14 @@ async function presign(
 }
 
 /**
- * URL the browser can PUT one object to. The Content-Type is signed, so the upload must send
- * exactly `contentType`; S3 can't bind the size to a presigned PUT, so check it with `head` afterwards.
+ * URL the browser can PUT one object to. The Content-Type and the Content-Length are signed, so the
+ * storage answers 403 to an upload of any other type or of any other number of bytes than `size`.
  */
-export function presignPut(key: string, contentType: string, expiresIn = 15 * 60) {
-	return presign('PUT', key, expiresIn, { 'content-type': contentType });
+export function presignPut(key: string, contentType: string, size: number, expiresIn = 15 * 60) {
+	return presign('PUT', key, expiresIn, {
+		'content-type': contentType,
+		'content-length': String(size)
+	});
 }
 
 /** URL the browser can GET one object from. */

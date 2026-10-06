@@ -17,6 +17,8 @@ model User {
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
+  media         Media[]
+  albums        Album[]
 
   @@unique([email])
   @@map("user")
@@ -80,4 +82,74 @@ model Jwks {
   crv        String?
 
   @@map("jwks")
+}
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+
+  @@map("media_kind")
+}
+
+// PENDING: the row exists and presigned upload URLs were issued; READY: the upload was verified.
+enum MediaStatus {
+  PENDING
+  READY
+
+  @@map("media_status")
+}
+
+// A photo or video. The bytes live in object storage under `<userId>/<id>/original` and
+// `<userId>/<id>/thumb` (see src/lib/server/media.ts).
+model Media {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        MediaKind
+  status      MediaStatus  @default(PENDING)
+  name        String
+  contentType String
+  // Bytes. Int holds up to 2 GiB, enough for the 1 GB video cap; switch to BigInt if that is raised.
+  size        Int
+  width       Int?
+  height      Int?
+  // Seconds, videos only.
+  duration    Float?
+  // EXIF date taken, or the file's last-modified time.
+  takenAt     DateTime
+  hasThumb    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  albums      AlbumMedia[]
+  coverOf     Album[]      @relation("AlbumCover")
+
+  // The gallery query: one user's READY items, newest first, paged by (takenAt, id).
+  @@index([userId, status, takenAt(sort: Desc), id(sort: Desc)])
+  @@map("media")
+}
+
+model Album {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  // Falls back to the album's first item when unset (or when the cover is deleted).
+  coverId   String?
+  cover     Media?       @relation("AlbumCover", fields: [coverId], references: [id], onDelete: SetNull)
+  createdAt DateTime     @default(now())
+  media     AlbumMedia[]
+
+  @@index([userId])
+  @@map("album")
+}
+
+model AlbumMedia {
+  albumId String
+  album   Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  mediaId String
+  media   Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  addedAt DateTime @default(now())
+
+  @@id([albumId, mediaId])
+  @@index([mediaId])
+  @@map("album_media")
 }
