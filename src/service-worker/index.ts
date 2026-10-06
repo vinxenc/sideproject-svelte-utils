@@ -6,6 +6,8 @@ const PREFIX = 'utilities-';
 const CACHE = `${PREFIX}${version}`;
 // Hashed build output (JS/CSS): its URL changes whenever its content does.
 const IMMUTABLE = immutable.map(({ path }) => path);
+// Never handled by the worker, so never cached.
+const UNCACHED = ['/api/media', '/api/albums'];
 // Offline fallback for any page navigation that isn't cached ("/" is only a redirect).
 const FALLBACK = '/sign-in';
 // Precached for offline: build output, everything in /static, and the fallback page.
@@ -39,6 +41,10 @@ self.addEventListener('fetch', (event) => {
 	if (event.request.method !== 'GET') return;
 	const url = new URL(event.request.url);
 	if (url.origin !== self.location.origin) return;
+	// Per-user media goes straight to the network and is never cached: these URLs redirect to the
+	// storage origin, which fetch() inside the worker can't follow (ERR_FAILED), and it also keeps
+	// someone else's photos out of the cache.
+	if (UNCACHED.some((prefix) => url.pathname.startsWith(prefix))) return;
 
 	event.respondWith(
 		(async () => {

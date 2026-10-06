@@ -2,12 +2,9 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { jwt, openAPI } from 'better-auth/plugins';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { getRequestEvent } from '$app/server';
-import { BETTER_AUTH_SECRET, DATABASE_URL } from '$app/env/private';
-import { PrismaClient } from './prisma/client.js';
-
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL }) });
+import { BETTER_AUTH_SECRET } from '$app/env/private';
+import { prisma } from './db.js';
 
 export const auth = betterAuth({
 	secret: BETTER_AUTH_SECRET,

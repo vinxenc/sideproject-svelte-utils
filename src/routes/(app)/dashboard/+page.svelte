@@ -12,6 +12,8 @@
 	import PaintbrushIcon from '@lucide/svelte/icons/paintbrush';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import VideoIcon from '@lucide/svelte/icons/video';
+	import DashboardNav from '#lib/components/dashboard-nav.svelte';
+	import Gallery from '#lib/components/media/gallery.svelte';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
@@ -54,19 +56,7 @@
 		<Sidebar.Content>
 			<Sidebar.Group>
 				<Sidebar.GroupContent>
-					<Sidebar.Menu>
-						{#each nav as item (item.name)}
-							<Sidebar.MenuItem>
-								<Sidebar.MenuButton
-									isActive={item.name === active}
-									onclick={() => (active = item.name)}
-								>
-									<item.icon />
-									<span>{item.name}</span>
-								</Sidebar.MenuButton>
-							</Sidebar.MenuItem>
-						{/each}
-					</Sidebar.Menu>
+					<DashboardNav items={nav} bind:active />
 				</Sidebar.GroupContent>
 			</Sidebar.Group>
 		</Sidebar.Content>
@@ -102,9 +92,14 @@
 			</Breadcrumb.Root>
 		</header>
 		<div class="flex flex-1 flex-col gap-4 p-4 pt-0">
-			{#each Array.from({ length: 10 }, (_, i) => i) as i (i)}
-				<div class="aspect-video max-w-3xl rounded-xl bg-muted/50"></div>
-			{/each}
+			<!-- Chosen by page state, not the URL, and fetched when the tab opens. -->
+			{#if active === 'Photo & video'}
+				<Gallery />
+			{:else}
+				{#each Array.from({ length: 10 }, (_, i) => i) as i (i)}
+					<div class="aspect-video max-w-3xl rounded-xl bg-muted/50"></div>
+				{/each}
+			{/if}
 		</div>
 	</Sidebar.Inset>
 </Sidebar.Provider>
