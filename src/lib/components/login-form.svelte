@@ -1,24 +1,13 @@
 <script lang="ts">
 	import { Button } from '#lib/components/ui/button/index.js';
-	import {
-		FieldGroup,
-		Field,
-		FieldLabel,
-		FieldDescription,
-		FieldSeparator,
-		FieldError
-	} from '#lib/components/ui/field/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { authClient } from '#lib/auth-client.js';
 	import { goto } from '$app/navigation';
-	import { cn, type WithElementRef } from '#lib/utils.js';
-	import type { HTMLFormAttributes } from 'svelte/elements';
+	import { cn } from '#lib/utils.js';
+	import type { HTMLAttributes } from 'svelte/elements';
 
-	let {
-		ref = $bindable(null),
-		class: className,
-		...restProps
-	}: WithElementRef<HTMLFormAttributes> = $props();
+	let { class: className, ...restProps }: HTMLAttributes<HTMLFormElement> = $props();
 
 	const id = $props.id();
 
@@ -46,16 +35,16 @@
 	}
 </script>
 
-<form class={cn('flex flex-col gap-6', className)} bind:this={ref} {onsubmit} {...restProps}>
-	<FieldGroup>
+<form class={cn('flex flex-col gap-6', className)} {onsubmit} {...restProps}>
+	<Field.Group>
 		<div class="flex flex-col items-center gap-1 text-center">
 			<h1 class="text-2xl font-bold">Login to your account</h1>
 			<p class="text-sm text-balance text-muted-foreground">
 				Enter your email below to login to your account
 			</p>
 		</div>
-		<Field>
-			<FieldLabel for="email-{id}">Email</FieldLabel>
+		<Field.Field>
+			<Field.Label for="email-{id}">Email</Field.Label>
 			<Input
 				id="email-{id}"
 				type="email"
@@ -64,10 +53,10 @@
 				required
 				bind:value={email}
 			/>
-		</Field>
-		<Field>
+		</Field.Field>
+		<Field.Field>
 			<div class="flex items-center">
-				<FieldLabel for="password-{id}">Password</FieldLabel>
+				<Field.Label for="password-{id}">Password</Field.Label>
 				<a href="##" class="ms-auto text-sm underline-offset-4 hover:underline">
 					Forgot your password?
 				</a>
@@ -79,13 +68,13 @@
 				required
 				bind:value={password}
 			/>
-		</Field>
-		<Field>
-			<FieldError>{error}</FieldError>
+		</Field.Field>
+		<Field.Field>
+			<Field.Error>{error}</Field.Error>
 			<Button type="submit" disabled={pending}>{pending ? 'Logging in…' : 'Login'}</Button>
-		</Field>
-		<FieldSeparator>Or continue with</FieldSeparator>
-		<Field>
+		</Field.Field>
+		<Field.Separator>Or continue with</Field.Separator>
+		<Field.Field>
 			<Button variant="outline" type="button">
 				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
 					<path
@@ -95,10 +84,10 @@
 				</svg>
 				Login with GitHub
 			</Button>
-			<FieldDescription class="text-center">
+			<Field.Description class="text-center">
 				Don't have an account?
 				<a href="/sign-up" class="underline underline-offset-4">Sign up</a>
-			</FieldDescription>
-		</Field>
-	</FieldGroup>
+			</Field.Description>
+		</Field.Field>
+	</Field.Group>
 </form>
