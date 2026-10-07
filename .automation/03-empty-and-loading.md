@@ -13,7 +13,7 @@ What a brand-new account sees on `Photo & video` before it has any media. Run th
 
 **Expected**
 
-- Exactly four tiles, laid out as one mosaic block of the four-column grid: the first is large (two columns wide, two rows high), the second and third are small (one column, one row), the fourth is wide (two columns, one row). In a phone-sized viewport the grid has two columns and the same four tiles are a 2×2, two 1×1 and the start of the next block, another 2×2 (the layout rule is in GAL-01).
+- Two square placeholder tiles in every column (four columns wide, two in a phone-sized viewport, see GAL-01).
 - The tiles are plain grey (muted background): no icon, no text, no image, **no pulsing animation** (the computed `animation-name` is `none`).
 - No message panel and no inline "Try again" button. A visually hidden note reads `No photos or videos to show`.
 - No toast.
@@ -29,8 +29,8 @@ What a brand-new account sees on `Photo & video` before it has any media. Run th
 
 **Expected**
 
-- While waiting: four tiles in the same mosaic block, now **pulsing** (computed `animation-name` is `pulse`).
-- After the list arrives (no items): the same four tiles, no longer animated (`none`), and no toast.
+- While waiting: the same placeholder tiles, now **pulsing** (computed `animation-name` is `pulse`).
+- After the list arrives (no items): the same tiles, no longer animated (`none`), and no toast.
 
 ## EMP-03 First list request fails
 
@@ -44,7 +44,7 @@ What a brand-new account sees on `Photo & video` before it has any media. Run th
 **Expected**
 
 - A toast titled `Couldn't load your photos and videos`, with the description `Failed to fetch` and an action button `Try again`.
-- Behind it: the four plain grey tiles, not animated; no real tiles.
+- Behind it: the plain grey placeholder tiles, not animated; no real tiles.
 - The toast does **not** auto-dismiss: it is still there after more than 4 seconds.
-- After `Try again`: a second list request is sent (two in total), the toast is gone, and the grid shows the four plain grey tiles again (the account still has no media).
+- After `Try again`: a second list request is sent (two in total), the toast is gone, and the grid shows the same plain grey placeholder tiles again (the account still has no media).
 - Restore `fetch` afterwards.

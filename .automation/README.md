@@ -1,6 +1,6 @@
 # Browser test cases for the Photo & video gallery
 
-Plain-language test cases for the gallery in the dashboard: the upload dialog, the mosaic grid, the full-screen viewer and uploads that carry on in the background. They are written for an AI agent that runs them by itself in a real browser on this machine. The agent reads a case, drives the browser with its own tools, compares what it sees with **Expected** and reports. There are no scripts in this folder on purpose: each case says what to prepare, what to do and what must happen.
+Plain-language test cases for the gallery in the dashboard: the upload dialog, the masonry grid, the full-screen viewer and uploads that carry on in the background. They are written for an AI agent that runs them by itself in a real browser on this machine. The agent reads a case, drives the browser with its own tools, compares what it sees with **Expected** and reports. There are no scripts in this folder on purpose: each case says what to prepare, what to do and what must happen.
 
 The cases describe the app as built through Phase 4 of [docs/gallery-plan.md](../docs/gallery-plan.md) plus the follow-ups after it. Delete (Phase 5) and albums (Phase 6) are not built, so they have no cases yet.
 
@@ -9,7 +9,7 @@ The cases describe the app as built through Phase 4 of [docs/gallery-plan.md](..
 1. Read this file, then [00-setup.md](00-setup.md) and [01-test-data.md](01-test-data.md).
 2. Run the files in numeric order. Each case lists what it **Needs** (state left behind by earlier cases); the order is chosen so those needs are met. One exception to keep in mind: [02-api.md](02-api.md) uses its own two accounts through a plain HTTP client, never the browser's account, so that the browser account is still empty when [03-empty-and-loading.md](03-empty-and-loading.md) starts.
 3. For every case do the steps, compare with **Expected** and record `PASS`, `FAIL` or `SKIPPED` with a short note of what you actually saw (texts, counts, sizes). Take a screenshot only where a case asks for one, or to show a failure.
-4. Use a desktop-sized window (about 1000 px wide or more) unless a case says otherwise; the mosaic has four columns from 576 px of content width.
+4. Use a desktop-sized window (about 1000 px wide or more) unless a case says otherwise; the masonry grid has four columns from 900 px of content width.
 5. A failed setup step stops the run. A failed test case does not: note it and carry on with the cases that do not depend on it.
 6. Always finish with [10-cleanup.md](10-cleanup.md), even after failures.
 7. Print the report in the terminal (format at the end). Do not write it into the repo.
@@ -57,7 +57,7 @@ Prefer running JavaScript in the page for exact checks (counts, computed styles,
 | [02-api.md](02-api.md)                                                     | API   | The `/api/media` contract: auth, uploads, validation, isolation, paging, redirects, purge |
 | [03-empty-and-loading.md](03-empty-and-loading.md)                         | EMP   | Brand-new account: empty grid, loading skeleton, failed first load                        |
 | [04-upload.md](04-upload.md)                                               | UPL   | The upload dialog from picking files to stored data and thumbnails                        |
-| [05-gallery.md](05-gallery.md)                                             | GAL   | The populated grid: mosaic, tiles, image loading, infinite scroll, new uploads            |
+| [05-gallery.md](05-gallery.md)                                             | GAL   | The populated grid: masonry, tiles, image loading, infinite scroll, new uploads           |
 | [06-upload-failure-and-background.md](06-upload-failure-and-background.md) | BG    | Failed uploads, retry, hiding the dialog, leaving the page, signing out                   |
 | [07-lightbox.md](07-lightbox.md)                                           | LBX   | The full-screen viewer                                                                    |
 | [08-mobile.md](08-mobile.md)                                               | MOB   | Phone-sized viewport                                                                      |
