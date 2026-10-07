@@ -13,7 +13,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 **Expected**
 
 - A modal dialog titled `Add to gallery` with the text `Choose photos and videos from your library, check the previews, then submit.`
-- Nothing in the body: no list and no "nothing selected" card. On a wide screen the empty body is about 320 px tall (room for two rows of three previews, so the dialog keeps its height as files are added and the previews scroll beyond six). Above the footer, a row of square `Library` and `Camera` buttons that scrolls sideways when more sources are added. In a phone-sized viewport (below 640 px) the dialog fills the whole screen: the previews take the space between the header and the footer, and the buttons row and the footer sit at the bottom, the footer last.
+- Nothing in the body: no list and no "nothing selected" card. On a wide screen the empty body is about 320 px tall (room for two rows of three previews, so the dialog keeps its height as files are added and the previews scroll beyond six). Above the footer, a row of square `Library` and `Camera` buttons that scrolls sideways when more sources are added. In a phone-sized viewport (below 640 px) the dialog fills the whole screen: the previews take the space between the header and the footer, and the buttons row and the footer sit at the bottom, the footer last, with `Cancel` and `Submit` side by side on one row, each half the width.
 - Footer: `Cancel` and a **disabled** `Submit`.
 - The page behind is dimmed; the dialog is about 512 px wide on a desktop window.
 

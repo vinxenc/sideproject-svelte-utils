@@ -257,7 +257,8 @@
 			/>
 		</div>
 
-		<Dialog.Footer>
+		<!-- Both buttons share one row on a phone, each taking half of it. -->
+		<Dialog.Footer class="max-sm:flex-row max-sm:*:flex-1">
 			<Button variant="outline" onclick={() => uploads.close()}>
 				{uploads.uploading ? 'Hide' : 'Cancel'}
 			</Button>
