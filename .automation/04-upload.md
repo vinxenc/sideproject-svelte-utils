@@ -4,7 +4,7 @@ From opening the dialog to what is stored. These cases build the data that [05-g
 
 **Needs for the whole file:** SET-01 to SET-07, the QA account signed in, the browser on `Photo & video`, and the files from [01-test-data.md](01-test-data.md).
 
-Labels the cases refer to: the round add button (accessible name `Add photos and videos`, `Uploading photos and videos` while uploading); the dialog title `Add to gallery`; buttons `Library`, `Cancel` (idle) or `Hide` (uploading), `Submit` with a count such as `Submit (9)`, or `Uploading` while busy; per card `Remove <file name>` and `Retry <file name>`; the dialog's own close button `Close`.
+Labels the cases refer to: the round add button (accessible name `Add photos and videos`, `Uploading photos and videos` while uploading); the dialog title `Add to gallery`; buttons `Library` and `Camera` (square, in a row above the footer that swipes sideways), `Cancel` (idle) or `Hide` (uploading), `Submit` with a count such as `Submit (9)`, or `Uploading` while busy; per card `Remove <file name>` and `Retry <file name>`; the dialog's own close button `Close`.
 
 ## UPL-01 The dialog opens
 
@@ -13,7 +13,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 **Expected**
 
 - A modal dialog titled `Add to gallery` with the text `Choose photos and videos from your library, check the previews, then submit.`
-- A `Library` button, then nothing else in the body: no list and no "nothing selected" card.
+- Nothing in the body: no list and no "nothing selected" card. On a wide screen the empty body is about 320 px tall (room for two rows of three previews, so the dialog keeps its height as files are added and the previews scroll beyond six). Above the footer, a row of square `Library` and `Camera` buttons that scrolls sideways when more sources are added. In a phone-sized viewport (below 640 px) the dialog fills the whole screen: the previews take the space between the header and the footer, and the buttons row and the footer sit at the bottom, the footer last.
 - Footer: `Cancel` and a **disabled** `Submit`.
 - The page behind is dimmed; the dialog is about 512 px wide on a desktop window.
 
@@ -43,7 +43,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 
 **Expected while uploading**
 
-- The submit button changes to a spinner with `Uploading` and is disabled; `Library` is disabled; the left footer button reads `Hide`.
+- The submit button changes to a spinner with `Uploading` and is disabled; `Library` and `Camera` are disabled; the left footer button reads `Hide`.
 - The round add button shows a spinner and its accessible name is `Uploading photos and videos`.
 - Each card moves through `Waiting`, `Preparing`, `Uploading N%` (with a progress bar) and `Finishing` to `Added · <size>` with a check mark over the preview. The remove buttons disappear while a card is in flight and do not come back on a finished card.
 - **At most 3 originals are uploading at the same moment** (the in-flight count never exceeds 3).
@@ -111,7 +111,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 
 ## UPL-09 Dropping files
 
-**Steps:** with the dialog open, dispatch `dragover` and then `drop` events carrying `dialog-drop.png` on the dialog's body (the area with the Library button). Then drop `notes.txt`.
+**Steps:** with the dialog open, dispatch `dragover` and then `drop` events carrying `dialog-drop.png` on the dialog's body (the area above the footer). Then drop `notes.txt`.
 
 **Expected**
 
@@ -127,7 +127,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 
 - Cards show `250 MB` and, because the bytes are not a real video, a video icon with no preview, and they become ready within a few seconds (the preview step must not hang).
 - The texts seen include `Preparing`, `Uploading N%`, `Finishing` and `Added`. Each card's progress bar value only increases and ends at 100; many different values are seen.
-- At most 3 uploads in flight, `Library` disabled throughout, the dialog closes by itself and the toast reads `Added 2 items to the gallery`.
+- At most 3 uploads in flight, `Library` and `Camera` disabled throughout, the dialog closes by itself and the toast reads `Added 2 items to the gallery`.
 
 ## UPL-11 Size labels
 
@@ -151,3 +151,22 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 ## UPL-12 The Library button
 
 Opens the system file picker; an agent cannot drive it. See [11-manual-and-gaps.md](11-manual-and-gaps.md).
+
+## UPL-13 The Camera button
+
+**Steps:** replace `navigator.mediaDevices.getUserMedia` before opening the dialog: for `video` return the stream of a canvas that keeps repainting (`canvas.captureStream()`), for `audio` the stream of an `AudioContext` oscillator (`createMediaStreamDestination()`); remember each call's constraints. Make `enumerateDevices` list two `videoinput` devices. Open the dialog, press `Camera`, take two photos with `Take photo`, press the `Video` button, `Start recording`, wait 2.5 s, `Stop recording`, then `Done`. Do it in a desktop-sized window and again in the phone preset (UPL-14 adds what differs there).
+
+**Expected**
+
+- `Camera` opens a black view over the whole dialog with the live picture, a round shutter button, `Photo`, `Video` and `Switch camera` buttons and `Done`. The first `getUserMedia` call asks for video only (`facingMode` ideal `environment`, no audio).
+- Each photo is added to the list as `camera-<timestamp>.jpg` (an image/jpeg, the timestamp has milliseconds so two photos never share a name); `Done` shows the running count, `Done (3)` at the end.
+- While recording a red timer counts up, the shutter turns into a red square and `Photo`, `Video`, `Switch camera` and `Done` are disabled. The audio is asked for at the first `Start recording` (a call with only `audio: true`). The result is added as `camera-<timestamp>.webm` (or `.mp4`) with a play badge and a duration.
+- `Done` closes the camera view and leaves the dialog and its list as they are. Escape does the same (a second Escape closes the dialog). Closing the camera ends the stream: every track's `readyState` is `ended`.
+- `Switch camera` asks again with `facingMode` ideal `user`, the preview is mirrored (the saved photo is not) and a second press goes back to `environment`. With one camera the button is not shown.
+- Refusing access (make `getUserMedia` reject with `NotAllowedError`) shows the toast `Allow camera access to take photos` and no camera view; `NotFoundError` shows `No camera found`.
+
+## UPL-14 The Camera button on a phone
+
+**Steps:** emulate a phone (mobile preset, `(pointer: coarse)` matches) and run UPL-13.
+
+**Expected:** the camera view fills the whole screen, the same as on a computer: the controls sit at the bottom, clear of the home bar, and `Switch camera` is there. No native file picker opens. Only when `navigator.mediaDevices.getUserMedia` is missing (an insecure page) does `Camera` click the second file input (`capture="environment"`, single file) instead.

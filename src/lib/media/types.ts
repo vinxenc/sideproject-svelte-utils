@@ -56,6 +56,9 @@ export type MediaItem = {
 	id: string;
 	kind: MediaKind;
 	name: string;
+	/** Pixels as shown (EXIF rotation applied); null when the browser couldn't decode the file. */
+	width: number | null;
+	height: number | null;
 	/** Seconds, videos only. */
 	duration: number | null;
 	/** ISO 8601 */

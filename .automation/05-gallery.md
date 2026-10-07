@@ -4,17 +4,16 @@ The grid once it has items: layout, tiles, image loading, infinite scroll and ho
 
 **Needs for the whole file:** [04-upload.md](04-upload.md) done (the standard set, `rotated.jpg` and the two big files are stored), the QA account signed in, the browser on `Photo & video`. GAL-06 to GAL-08 add placeholder rows to the account.
 
-## GAL-01 Mosaic layout
+## GAL-01 Masonry layout
 
-**Steps:** with all items loaded and the content area wide, read the placement of the first eight tiles (computed `grid-column` and `grid-row` spans, or a screenshot).
+**Steps:** with all items loaded, read the columns and tile sizes (computed `aspect-ratio` and bounding boxes, or a screenshot). Repeat with the content area wide, medium and phone-sized.
 
 **Expected**
 
-- The grid switches by the width of its own container, not of the window: **four columns** when the container is at least 36 rem (576 px) wide, **two columns** below that.
-- Four columns: the tiles repeat in blocks of four: 1st tile 2 columns × 2 rows, 2nd and 3rd tiles 1 × 1, 4th tile 2 columns × 1 row, then the 5th tile starts the next block (2 × 2) and so on. The blocks fit together with no holes.
-- Two columns: blocks of three: 1st tile 2 × 2, 2nd and 3rd tiles 1 × 1, the 4th tile starts the next block.
-- Rows are 7:6 (a tile is a little wider than tall): the row height is `(column width) × 6 / 7`. The gap is 12 px with four columns and 8 px with two.
-- The page size is 60, a multiple of both 4 and 3, so a page never ends in the middle of a block.
+- The grid switches by the width of its own container, not of the window: **four columns** from 900 px, **three** from 480 px, **two** below that. The gap is 12 px from 576 px and 8 px below.
+- Each tile keeps its photo's aspect ratio (`width / height` from the API item), clamped to between 1:2 and 2:1; an item without a size is a square.
+- Tiles go in newest-first order, each to the currently shortest column (the first one on a tie), so the columns end at nearly the same height.
+- Loading another page only adds tiles at the bottom of the columns; no tile already on screen moves.
 
 ## GAL-02 What a tile shows
 

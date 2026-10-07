@@ -16,6 +16,8 @@ export function toItem(m: Media): MediaItem {
 		id: m.id,
 		kind: m.kind,
 		name: m.name,
+		width: m.width,
+		height: m.height,
 		duration: m.duration,
 		takenAt: m.takenAt.toISOString(),
 		hasThumb: m.hasThumb

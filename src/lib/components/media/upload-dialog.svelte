@@ -1,5 +1,6 @@
 <script lang="ts">
 	import CheckIcon from '@lucide/svelte/icons/check';
+	import CameraIcon from '@lucide/svelte/icons/camera';
 	import ImageIcon from '@lucide/svelte/icons/image';
 	import ImagesIcon from '@lucide/svelte/icons/images';
 	import PlayIcon from '@lucide/svelte/icons/play';
@@ -7,6 +8,7 @@
 	import RotateCwIcon from '@lucide/svelte/icons/rotate-cw';
 	import VideoIcon from '@lucide/svelte/icons/video';
 	import XIcon from '@lucide/svelte/icons/x';
+	import CameraCapture from './camera-capture.svelte';
 	import * as Attachment from '#lib/components/ui/attachment/index.js';
 	import type { AttachmentState } from '#lib/components/ui/attachment/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -22,7 +24,15 @@
 
 	let { onuploaded }: { onuploaded: (item: MediaItem) => void } = $props();
 
-	let input: HTMLInputElement | undefined;
+	// Where files can come from. The row of buttons is built from this, so a new source is one more entry.
+	// `camera` sources open the live camera view, on a phone too; a browser without camera access (or
+	// without a secure page) falls back to the file input, where `capture` opens the device's camera app.
+	const sources = [
+		{ label: 'Library', icon: ImagesIcon, multiple: true, camera: false },
+		{ label: 'Camera', icon: CameraIcon, multiple: false, camera: true }
+	];
+	let cameraOpen = $state(false);
+	let inputs: HTMLInputElement[] = [];
 
 	// The files and their uploads live in the store, which outlives this component.
 	$effect(() => uploads.attach(onuploaded));
@@ -57,6 +67,13 @@
 			case 'error':
 				return row.error;
 		}
+	}
+
+	const liveCamera = () => !!navigator.mediaDevices?.getUserMedia;
+
+	function choose(i: number) {
+		if (sources[i].camera && liveCamera()) cameraOpen = true;
+		else inputs[i]?.click();
 	}
 
 	function onpick(event: Event & { currentTarget: HTMLInputElement }) {
@@ -184,7 +201,17 @@
 		{/snippet}
 	</Dialog.Trigger>
 
-	<Dialog.Content class="sm:max-w-lg">
+	<!-- A phone gets the whole screen: the previews take the room between the header and the buttons. -->
+	<Dialog.Content
+		onEscapeKeydown={(event) => {
+			// Escape leaves the camera first, not the whole dialog.
+			if (cameraOpen) {
+				event.preventDefault();
+				cameraOpen = false;
+			}
+		}}
+		class="max-sm:top-0 max-sm:left-0 max-sm:flex max-sm:h-svh max-sm:w-svw max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:rounded-none max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] max-sm:ring-0 sm:max-w-lg"
+	>
 		<Dialog.Header>
 			<Dialog.Title>Add to gallery</Dialog.Title>
 			<Dialog.Description>
@@ -192,28 +219,52 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div role="presentation" class="flex flex-col gap-3" {ondragover} {ondrop}>
-			<Button variant="outline" disabled={uploads.uploading} onclick={() => input?.click()}>
-				<ImagesIcon data-icon="inline-start" />
-				Library
-			</Button>
-			<input
-				bind:this={input}
-				type="file"
-				multiple
-				accept="image/*,video/*"
-				class="hidden"
-				onchange={onpick}
-			/>
-
+		<!-- On a wide screen the area is tall enough for two rows of previews (6 files) even when empty, so
+		     the dialog doesn't jump in height as files are added (less on a short window); on a phone it
+		     fills the free space instead. -->
+		<div
+			role="presentation"
+			class="flex min-h-0 flex-col gap-3 max-sm:flex-1 sm:h-[min(20rem,45svh)]"
+			{ondragover}
+			{ondrop}
+		>
 			{#if uploads.rows.length}
 				<!-- The padding and negative margin leave room for the cards' focus rings inside the scroller. -->
-				<ul class="-m-1 grid max-h-[45svh] grid-cols-2 gap-2 overflow-y-auto p-1 sm:grid-cols-3">
+				<ul
+					class="-m-1 grid min-h-0 grid-cols-2 content-start gap-2 overflow-y-auto p-1 max-sm:flex-1 sm:grid-cols-3"
+				>
 					{#each uploads.rows as row (row.key)}
 						{@render tile(row)}
 					{/each}
 				</ul>
 			{/if}
+		</div>
+
+		<!-- Square buttons in a row that swipes sideways, so more sources fit later. The negative margin lets the
+		     row scroll edge to edge while its first button lines up with the content. -->
+		<div
+			class="-mx-4 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden"
+		>
+			{#each sources as source, i (source.label)}
+				<Button
+					variant="outline"
+					class="size-20 shrink-0 snap-start flex-col gap-1.5"
+					disabled={uploads.uploading}
+					onclick={() => choose(i)}
+				>
+					<source.icon class="size-6" />
+					{source.label}
+				</Button>
+				<input
+					bind:this={inputs[i]}
+					type="file"
+					multiple={source.multiple}
+					accept="image/*,video/*"
+					capture={source.camera ? 'environment' : undefined}
+					class="hidden"
+					onchange={onpick}
+				/>
+			{/each}
 		</div>
 
 		<Dialog.Footer>
@@ -232,5 +283,12 @@
 				{/if}
 			</Button>
 		</Dialog.Footer>
+
+		{#if cameraOpen}
+			<CameraCapture
+				oncapture={(file) => uploads.add([file])}
+				onclose={() => (cameraOpen = false)}
+			/>
+		{/if}
 	</Dialog.Content>
 </Dialog.Root>
