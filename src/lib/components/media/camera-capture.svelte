@@ -1,6 +1,5 @@
 <script lang="ts">
 	import CameraIcon from '@lucide/svelte/icons/camera';
-	import SwitchCameraIcon from '@lucide/svelte/icons/switch-camera';
 	import VideoIcon from '@lucide/svelte/icons/video';
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
@@ -14,21 +13,12 @@
 	let video: HTMLVideoElement | undefined = $state();
 	let stream: MediaStream | undefined;
 	let live = $state(false);
-	// The lens in use: the back one first (a phone), the front one after a switch.
-	let facing = $state<'environment' | 'user'>('environment');
-	let canSwitch = $state(false);
 	let mode = $state<'photo' | 'video'>('photo');
 	let recorder = $state<MediaRecorder>();
 	let seconds = $state(0);
-	let taken = $state(0);
 	let timer: ReturnType<typeof setInterval> | undefined;
 
 	const stamp = () => new Date().toISOString().replace(/\D/g, '').slice(0, 17);
-
-	function add(file: File) {
-		taken++;
-		oncapture(file);
-	}
 
 	function stop() {
 		clearInterval(timer);
@@ -39,38 +29,27 @@
 		stream?.getTracks().forEach((track) => track.stop());
 	}
 
-	async function start(next: 'environment' | 'user') {
-		live = false;
-		stream?.getTracks().forEach((track) => track.stop());
-		try {
-			const s = await navigator.mediaDevices.getUserMedia({
-				video: { facingMode: { ideal: next } },
-				audio: false
-			});
-			if (gone) return s.getTracks().forEach((track) => track.stop());
-			stream = s; // sound is added again when the next recording starts
-			facing = next;
-			if (video) video.srcObject = s;
-			live = true;
-			// Device names stay hidden until access is granted, but the count of cameras is known.
-			const devices = await navigator.mediaDevices.enumerateDevices();
-			canSwitch = devices.filter((d) => d.kind === 'videoinput').length > 1;
-		} catch (e: unknown) {
-			const name = e instanceof DOMException ? e.name : '';
-			toast.error(
-				name === 'NotFoundError'
-					? 'No camera found'
-					: name === 'NotAllowedError'
-						? 'Allow camera access to take photos'
-						: "Couldn't open the camera"
-			);
-			onclose();
-		}
-	}
-
 	let gone = false;
 	onMount(() => {
-		void start('environment');
+		navigator.mediaDevices
+			.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+			.then((s) => {
+				if (gone) return s.getTracks().forEach((track) => track.stop());
+				stream = s;
+				if (video) video.srcObject = s;
+				live = true;
+			})
+			.catch((e: unknown) => {
+				const name = e instanceof DOMException ? e.name : '';
+				toast.error(
+					name === 'NotFoundError'
+						? 'No camera found'
+						: name === 'NotAllowedError'
+							? 'Allow camera access to take photos'
+							: "Couldn't open the camera"
+				);
+				onclose();
+			});
 		return () => {
 			gone = true;
 			stop();
@@ -86,7 +65,7 @@
 		const blob = await new Promise<Blob | null>((resolve) =>
 			canvas.toBlob(resolve, 'image/jpeg', 0.92)
 		);
-		if (blob) add(new File([blob], `camera-${stamp()}.jpg`, { type: 'image/jpeg' }));
+		if (blob) oncapture(new File([blob], `camera-${stamp()}.jpg`, { type: 'image/jpeg' }));
 	}
 
 	async function toggleRecording() {
@@ -112,7 +91,7 @@
 			recorder = undefined;
 			const mime = (rec.mimeType || type || 'video/webm').split(';')[0];
 			if (chunks.length)
-				add(
+				oncapture(
 					new File(chunks, `camera-${stamp()}.${mime === 'video/mp4' ? 'mp4' : 'webm'}`, {
 						type: mime
 					})
@@ -128,13 +107,7 @@
 <!-- Covers the whole upload dialog. Every photo or recording goes straight to the upload dialog's list. -->
 <div class="absolute inset-0 z-10 flex flex-col rounded-[inherit] bg-black text-white">
 	<div class="relative min-h-0 flex-1">
-		<video
-			bind:this={video}
-			autoplay
-			playsinline
-			muted
-			class={cn('size-full object-contain', facing === 'user' && '-scale-x-100')}
-		></video>
+		<video bind:this={video} autoplay playsinline muted class="size-full object-contain"></video>
 		{#if !live}
 			<span class="absolute inset-0 flex items-center justify-center"><Spinner /></span>
 		{/if}
@@ -169,17 +142,6 @@
 				<VideoIcon />
 				<span class="sr-only">Video</span>
 			</Button>
-			{#if canSwitch}
-				<Button
-					variant="ghost"
-					size="icon"
-					disabled={!!recorder || !live}
-					onclick={() => start(facing === 'environment' ? 'user' : 'environment')}
-				>
-					<SwitchCameraIcon />
-					<span class="sr-only">Switch camera</span>
-				</Button>
-			{/if}
 		</div>
 
 		<button
@@ -201,9 +163,7 @@
 		</button>
 
 		<div class="flex justify-end">
-			<Button variant="secondary" disabled={!!recorder} onclick={onclose}>
-				Done{taken ? ` (${taken})` : ''}
-			</Button>
+			<Button variant="secondary" disabled={!!recorder} onclick={onclose}>Done</Button>
 		</div>
 	</div>
 </div>

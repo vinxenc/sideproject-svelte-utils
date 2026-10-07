@@ -13,7 +13,7 @@ What a brand-new account sees on `Photo & video` before it has any media. Run th
 
 **Expected**
 
-- Two placeholder tiles in every column (four columns wide, two in a phone-sized viewport, see GAL-01), alternating tall and wide.
+- Two square placeholder tiles in every column (four columns wide, two in a phone-sized viewport, see GAL-01).
 - The tiles are plain grey (muted background): no icon, no text, no image, **no pulsing animation** (the computed `animation-name` is `none`).
 - No message panel and no inline "Try again" button. A visually hidden note reads `No photos or videos to show`.
 - No toast.

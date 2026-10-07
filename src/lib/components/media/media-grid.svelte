@@ -46,9 +46,6 @@
 		return cols;
 	});
 
-	// Loading placeholders: two per column, alternating tall and wide so the columns look uneven.
-	const skeletonRatios = (column: number) => (column % 2 ? [1.25, 0.75] : [0.75, 1.25]);
-
 	// The sentinel sits below the grid. It is removed while a page loads and rendered again
 	// afterwards, so a sentinel that is still on screen once the page has arrived triggers the next.
 	function nearEnd(node: HTMLElement) {
@@ -112,11 +109,8 @@
 				{#if loading || items.length === 0}
 					<!-- Pulsing while a page is on its way, standing still when there is nothing to show
 					     (an empty gallery, or the first page didn't load). -->
-					{#each skeletonRatios(c) as ratio (ratio)}
-						<Skeleton
-							class={cn('w-full rounded-xl', !loading && 'animate-none')}
-							style="aspect-ratio: {ratio}"
-						/>
+					{#each { length: 2 }, i (i)}
+						<Skeleton class={cn('aspect-square w-full rounded-xl', !loading && 'animate-none')} />
 					{/each}
 				{/if}
 			</div>

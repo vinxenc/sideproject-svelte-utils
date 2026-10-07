@@ -154,19 +154,18 @@ Opens the system file picker; an agent cannot drive it. See [11-manual-and-gaps.
 
 ## UPL-13 The Camera button
 
-**Steps:** replace `navigator.mediaDevices.getUserMedia` before opening the dialog: for `video` return the stream of a canvas that keeps repainting (`canvas.captureStream()`), for `audio` the stream of an `AudioContext` oscillator (`createMediaStreamDestination()`); remember each call's constraints. Make `enumerateDevices` list two `videoinput` devices. Open the dialog, press `Camera`, take two photos with `Take photo`, press the `Video` button, `Start recording`, wait 2.5 s, `Stop recording`, then `Done`. Do it in a desktop-sized window and again in the phone preset (UPL-14 adds what differs there).
+**Steps:** replace `navigator.mediaDevices.getUserMedia` before opening the dialog: for `video` return the stream of a canvas that keeps repainting (`canvas.captureStream()`), for `audio` the stream of an `AudioContext` oscillator (`createMediaStreamDestination()`); remember each call's constraints. Open the dialog, press `Camera`, take two photos with `Take photo`, press the `Video` button, `Start recording`, wait 2.5 s, `Stop recording`, then `Done`. Do it in a desktop-sized window and again in the phone preset (UPL-14 adds what differs there).
 
 **Expected**
 
-- `Camera` opens a black view over the whole dialog with the live picture, a round shutter button, `Photo`, `Video` and `Switch camera` buttons and `Done`. The first `getUserMedia` call asks for video only (`facingMode` ideal `environment`, no audio).
-- Each photo is added to the list as `camera-<timestamp>.jpg` (an image/jpeg, the timestamp has milliseconds so two photos never share a name); `Done` shows the running count, `Done (3)` at the end.
-- While recording a red timer counts up, the shutter turns into a red square and `Photo`, `Video`, `Switch camera` and `Done` are disabled. The audio is asked for at the first `Start recording` (a call with only `audio: true`). The result is added as `camera-<timestamp>.webm` (or `.mp4`) with a play badge and a duration.
+- `Camera` opens a black view over the whole dialog with the live picture, a round shutter button, `Photo` and `Video` buttons and `Done`. The first `getUserMedia` call asks for video only (`facingMode` ideal `environment`, no audio).
+- Each photo is added to the list as `camera-<timestamp>.jpg` (an image/jpeg, the timestamp has milliseconds so two photos never share a name).
+- While recording a red timer counts up, the shutter turns into a red square and `Photo`, `Video` and `Done` are disabled. The audio is asked for at the first `Start recording` (a call with only `audio: true`). The result is added as `camera-<timestamp>.webm` (or `.mp4`) with a play badge and a duration.
 - `Done` closes the camera view and leaves the dialog and its list as they are. Escape does the same (a second Escape closes the dialog). Closing the camera ends the stream: every track's `readyState` is `ended`.
-- `Switch camera` asks again with `facingMode` ideal `user`, the preview is mirrored (the saved photo is not) and a second press goes back to `environment`. With one camera the button is not shown.
 - Refusing access (make `getUserMedia` reject with `NotAllowedError`) shows the toast `Allow camera access to take photos` and no camera view; `NotFoundError` shows `No camera found`.
 
 ## UPL-14 The Camera button on a phone
 
-**Steps:** emulate a phone (mobile preset, `(pointer: coarse)` matches) and run UPL-13.
+**Steps:** emulate a phone (mobile preset) and run UPL-13.
 
-**Expected:** the camera view fills the whole screen, the same as on a computer: the controls sit at the bottom, clear of the home bar, and `Switch camera` is there. No native file picker opens. Only when `navigator.mediaDevices.getUserMedia` is missing (an insecure page) does `Camera` click the second file input (`capture="environment"`, single file) instead.
+**Expected:** the camera view fills the whole screen, the same as on a computer: the controls sit at the bottom, clear of the home bar. No native file picker opens.

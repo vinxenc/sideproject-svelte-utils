@@ -25,14 +25,12 @@
 	let { onuploaded }: { onuploaded: (item: MediaItem) => void } = $props();
 
 	// Where files can come from. The row of buttons is built from this, so a new source is one more entry.
-	// `camera` sources open the live camera view, on a phone too; a browser without camera access (or
-	// without a secure page) falls back to the file input, where `capture` opens the device's camera app.
-	const sources = [
-		{ label: 'Library', icon: ImagesIcon, multiple: true, camera: false },
-		{ label: 'Camera', icon: CameraIcon, multiple: false, camera: true }
-	];
 	let cameraOpen = $state(false);
-	let inputs: HTMLInputElement[] = [];
+	let library: HTMLInputElement | undefined;
+	const sources = [
+		{ label: 'Library', icon: ImagesIcon, pick: () => library?.click() },
+		{ label: 'Camera', icon: CameraIcon, pick: () => (cameraOpen = true) }
+	];
 
 	// The files and their uploads live in the store, which outlives this component.
 	$effect(() => uploads.attach(onuploaded));
@@ -67,13 +65,6 @@
 			case 'error':
 				return row.error;
 		}
-	}
-
-	const liveCamera = () => !!navigator.mediaDevices?.getUserMedia;
-
-	function choose(i: number) {
-		if (sources[i].camera && liveCamera()) cameraOpen = true;
-		else inputs[i]?.click();
 	}
 
 	function onpick(event: Event & { currentTarget: HTMLInputElement }) {
@@ -245,26 +236,25 @@
 		<div
 			class="-mx-4 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden"
 		>
-			{#each sources as source, i (source.label)}
+			{#each sources as source (source.label)}
 				<Button
 					variant="outline"
 					class="size-20 shrink-0 snap-start flex-col gap-1.5"
 					disabled={uploads.uploading}
-					onclick={() => choose(i)}
+					onclick={source.pick}
 				>
 					<source.icon class="size-6" />
 					{source.label}
 				</Button>
-				<input
-					bind:this={inputs[i]}
-					type="file"
-					multiple={source.multiple}
-					accept="image/*,video/*"
-					capture={source.camera ? 'environment' : undefined}
-					class="hidden"
-					onchange={onpick}
-				/>
 			{/each}
+			<input
+				bind:this={library}
+				type="file"
+				multiple
+				accept="image/*,video/*"
+				class="hidden"
+				onchange={onpick}
+			/>
 		</div>
 
 		<Dialog.Footer>
