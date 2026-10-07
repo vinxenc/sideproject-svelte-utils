@@ -9,6 +9,8 @@
 
 	let { class: className, ...restProps }: HTMLAttributes<HTMLFormElement> = $props();
 
+	const id = $props.id();
+
 	let name = $state('');
 	let email = $state('');
 	let password = $state('');
@@ -48,9 +50,9 @@
 			</p>
 		</div>
 		<Field.Field>
-			<Field.Label for="name">Full Name</Field.Label>
+			<Field.Label for="name-{id}">Full Name</Field.Label>
 			<Input
-				id="name"
+				id="name-{id}"
 				type="text"
 				placeholder="John Doe"
 				autocomplete="name"
@@ -59,9 +61,9 @@
 			/>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="email">Email</Field.Label>
+			<Field.Label for="email-{id}">Email</Field.Label>
 			<Input
-				id="email"
+				id="email-{id}"
 				type="email"
 				placeholder="m@example.com"
 				autocomplete="email"
@@ -73,9 +75,9 @@
 			</Field.Description>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="password">Password</Field.Label>
+			<Field.Label for="password-{id}">Password</Field.Label>
 			<Input
-				id="password"
+				id="password-{id}"
 				type="password"
 				minlength={8}
 				autocomplete="new-password"
@@ -85,9 +87,9 @@
 			<Field.Description>Must be at least 8 characters long.</Field.Description>
 		</Field.Field>
 		<Field.Field>
-			<Field.Label for="confirm-password">Confirm Password</Field.Label>
+			<Field.Label for="confirm-password-{id}">Confirm Password</Field.Label>
 			<Input
-				id="confirm-password"
+				id="confirm-password-{id}"
 				type="password"
 				autocomplete="new-password"
 				required

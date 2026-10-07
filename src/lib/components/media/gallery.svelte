@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import type { MediaItem, MediaPage } from '#lib/media/types.js';
 	import MediaGrid from './media-grid.svelte';
 	import MediaLightbox from './media-lightbox.svelte';
 	import UploadDialog from './upload-dialog.svelte';
 
-	let items = $state<MediaItem[]>([]);
+	let items = $state.raw<MediaItem[]>([]);
 	let cursor = $state<string | null>(null);
 	/** The first page has arrived. */
 	let loaded = $state(false);
@@ -53,10 +53,9 @@
 
 	onMount(() => {
 		void load();
+		// Leaving the tab makes the retry pointless.
+		return () => toast.dismiss(LOAD_ERROR_TOAST);
 	});
-
-	// Leaving the tab makes the retry pointless.
-	onDestroy(() => toast.dismiss(LOAD_ERROR_TOAST));
 
 	const newestFirst = (a: MediaItem, b: MediaItem) =>
 		b.takenAt.localeCompare(a.takenAt) || b.id.localeCompare(a.id);
