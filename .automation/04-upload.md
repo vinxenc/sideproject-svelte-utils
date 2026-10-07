@@ -162,6 +162,9 @@ Opens the system file picker; an agent cannot drive it. See [11-manual-and-gaps.
 - Each photo is added to the list as `camera-<timestamp>.jpg` (an image/jpeg, the timestamp has milliseconds so two photos never share a name).
 - While recording a red timer counts up, the shutter turns into a red square and `Photo`, `Video` and `Done` are disabled. The audio is asked for at the first `Start recording` (a call with only `audio: true`). The result is added as `camera-<timestamp>.webm` (or `.mp4`) with a play badge and a duration.
 - `Done` closes the camera view and leaves the dialog and its list as they are. Escape does the same (a second Escape closes the dialog). Closing the camera ends the stream: every track's `readyState` is `ended`.
+- Closing the dialog in any other way while the camera is open (the dialog's `Close` button, a click on the backdrop) closes the camera too: opening the dialog again shows the source buttons, not the camera.
+- While the microphone prompt is open (make the `audio: true` request wait), a second press of the shutter does not make a second request. Switching to `Photo` meanwhile and then answering the prompt still starts the recording, and the shutter, whatever the mode, stops it: the recording is added to the list and `Photo`, `Video` and `Done` are enabled again. Closing the camera while the prompt is open ends the microphone tracks that arrive afterwards (`readyState` `ended`).
+- On a page without `navigator.mediaDevices` (set it to `undefined` before pressing `Camera`) the toast `The camera needs a secure (https) page` appears and no camera view opens.
 - Refusing access (make `getUserMedia` reject with `NotAllowedError`) shows the toast `Allow camera access to take photos` and no camera view; `NotFoundError` shows `No camera found`.
 
 ## UPL-14 The Camera button on a phone

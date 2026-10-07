@@ -37,16 +37,32 @@
 	const ratioOf = (item: MediaItem) =>
 		item.width && item.height ? Math.min(2, Math.max(0.5, item.width / item.height)) : 1;
 
+	// The column each tile is in. A tile never changes column while the column count stays the same, so
+	// an upload that lands at the top doesn't make every other tile jump (and reload its image);
+	// only tiles that are new are placed, each in the shortest column.
+	let placed: Record<string, number> = {};
+	let placedFor = 0;
+
 	const columns = $derived.by(() => {
-		const cols: MediaItem[][] = Array.from({ length: columnCount }, () => []);
+		if (placedFor !== columnCount) {
+			placed = {};
+			placedFor = columnCount;
+		}
 		const heights = Array.from({ length: columnCount }, () => 0);
 		// Heights are in column widths, so a gap counts as gap / column width on top of the tile.
 		const gapHeight = gap / Math.max(1, (width - gap * (columnCount - 1)) / columnCount);
+		const heightOf = (item: MediaItem) => 1 / ratioOf(item) + gapHeight;
 		for (const item of items) {
-			const shortest = heights.indexOf(Math.min(...heights));
-			cols[shortest].push(item);
-			heights[shortest] += 1 / ratioOf(item) + gapHeight;
+			if (item.id in placed) heights[placed[item.id]] += heightOf(item);
 		}
+		for (const item of items) {
+			if (item.id in placed) continue;
+			const shortest = heights.indexOf(Math.min(...heights));
+			placed[item.id] = shortest;
+			heights[shortest] += heightOf(item);
+		}
+		const cols: MediaItem[][] = Array.from({ length: columnCount }, () => []);
+		for (const item of items) cols[placed[item.id]].push(item);
 		return cols;
 	});
 

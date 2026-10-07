@@ -170,7 +170,10 @@
 <Dialog.Root
 	bind:open={uploads.open}
 	onOpenChange={(isOpen) => {
-		if (!isOpen) uploads.close();
+		if (!isOpen) {
+			cameraOpen = false; // every way out of the dialog also leaves the camera
+			uploads.close();
+		}
 	}}
 >
 	<Dialog.Trigger>

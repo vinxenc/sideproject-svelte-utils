@@ -33,6 +33,12 @@
 
 	let gone = false;
 	onMount(() => {
+		// Missing on a page that isn't served over HTTPS (or in an old browser).
+		if (!navigator.mediaDevices?.getUserMedia) {
+			toast.error('The camera needs a secure (https) page');
+			onclose();
+			return;
+		}
 		navigator.mediaDevices
 			.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
 			.then((s) => {
@@ -158,7 +164,7 @@
 			type="button"
 			disabled={!live}
 			class="flex size-16 items-center justify-center rounded-full border-4 border-white outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-			onclick={() => (mode === 'photo' ? snap() : toggleRecording())}
+			onclick={() => (recorder || mode === 'video' ? toggleRecording() : snap())}
 		>
 			<span
 				class={cn(
