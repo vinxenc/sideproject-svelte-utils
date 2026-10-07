@@ -46,5 +46,5 @@ What a brand-new account sees on `Photo & video` before it has any media. Run th
 - A toast titled `Couldn't load your photos and videos`, with the description `Failed to fetch` and an action button `Try again`.
 - Behind it: the plain grey placeholder tiles, not animated; no real tiles.
 - The toast does **not** auto-dismiss: it is still there after more than 4 seconds.
-- After `Try again`: a second list request is sent (two in total), the toast is gone, and the grid shows the four plain grey tiles again (the account still has no media).
+- After `Try again`: a second list request is sent (two in total), the toast is gone, and the grid shows the same plain grey placeholder tiles again (the account still has no media).
 - Restore `fetch` afterwards.

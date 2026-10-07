@@ -22,9 +22,11 @@
 
 	function stop() {
 		clearInterval(timer);
-		if (recorder) {
-			recorder.onstop = null; // leaving the camera drops a recording in progress
-			if (recorder.state !== 'inactive') recorder.stop();
+		// Leaving the camera drops a recording in progress, but not one that was just stopped: its
+		// `stop` event is still queued and delivers the file.
+		if (recorder && recorder.state !== 'inactive') {
+			recorder.onstop = null;
+			recorder.stop();
 		}
 		stream?.getTracks().forEach((track) => track.stop());
 	}
@@ -68,16 +70,24 @@
 		if (blob) oncapture(new File([blob], `camera-${stamp()}.jpg`, { type: 'image/jpeg' }));
 	}
 
+	// True while the microphone prompt is open, so a second press doesn't start a second recording.
+	let asking = false;
+
 	async function toggleRecording() {
 		if (recorder) return recorder.stop();
-		if (!stream || !live) return;
+		if (!stream || !live || asking) return;
 		if (!stream.getAudioTracks().length) {
 			// Sound is asked for when the first recording starts, not when the camera opens.
+			asking = true;
 			try {
 				const audio = await navigator.mediaDevices.getUserMedia({ audio: true });
+				if (gone) return audio.getTracks().forEach((track) => track.stop());
 				audio.getAudioTracks().forEach((track) => stream?.addTrack(track));
 			} catch {
+				if (gone) return;
 				toast.info('Recording without sound');
+			} finally {
+				asking = false;
 			}
 		}
 		const type = ['video/webm;codecs=vp9,opus', 'video/webm', 'video/mp4'].find((t) =>

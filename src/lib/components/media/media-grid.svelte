@@ -32,16 +32,20 @@
 	const columnCount = $derived(width >= 900 ? 4 : width >= 480 ? 3 : 2);
 	// Unknown size (the browser couldn't decode the file): a square. Extremes are clamped so a
 	// panorama or a screenshot doesn't make a sliver or a tower.
+	// The gap between tiles, in px: wider from 576 px of grid width.
+	const gap = $derived(width >= 576 ? 12 : 8);
 	const ratioOf = (item: MediaItem) =>
 		item.width && item.height ? Math.min(2, Math.max(0.5, item.width / item.height)) : 1;
 
 	const columns = $derived.by(() => {
 		const cols: MediaItem[][] = Array.from({ length: columnCount }, () => []);
 		const heights = Array.from({ length: columnCount }, () => 0);
+		// Heights are in column widths, so a gap counts as gap / column width on top of the tile.
+		const gapHeight = gap / Math.max(1, (width - gap * (columnCount - 1)) / columnCount);
 		for (const item of items) {
 			const shortest = heights.indexOf(Math.min(...heights));
 			cols[shortest].push(item);
-			heights[shortest] += 1 / ratioOf(item);
+			heights[shortest] += 1 / ratioOf(item) + gapHeight;
 		}
 		return cols;
 	});
@@ -71,10 +75,10 @@
 	</span>
 {/snippet}
 
-<div class="@container" bind:clientWidth={width}>
-	<div class="flex gap-2 @xl:gap-3">
+<div bind:clientWidth={width}>
+	<div class="flex" style:gap="{gap}px">
 		{#each columns as column, c (c)}
-			<div class="flex min-w-0 flex-1 flex-col gap-2 @xl:gap-3">
+			<div class="flex min-w-0 flex-1 flex-col" style:gap="{gap}px">
 				{#each column as item (item.id)}
 					<button
 						type="button"
