@@ -184,4 +184,4 @@ As an experimental feature, the details of how `await` is handled (and related A
 
 ## Breaking changes
 
-Effects run in a slightly different order when the `experimental.async` option is `true`. Specifically, _block_ effects like `{#if ...}` and `{#each ...}` now run before an `$effect.pre` or `beforeUpdate` in the same component, which means that in very rare situations.
+Effects run in a slightly different order when the `experimental.async` option is `true`. Specifically, _block_ effects like `{#if ...}` and `{#each ...}` now run before an `$effect.pre` or `beforeUpdate` in the same component, which means that in very rare situations it is possible to update a block that should no longer exist, but only if you update state inside an effect, which you should avoid.
