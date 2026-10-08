@@ -12,7 +12,7 @@ An installable Progressive Web App (PWA) for web, mobile and desktop, built with
 | PWA       | SvelteKit built-in service worker + static web manifest, icons from `@vite-pwa/assets-generator`                                                                                                                              |
 | Auth / DB | [Better Auth](https://www.better-auth.com) (email + password) → [Prisma 7](https://www.prisma.io/docs) + `@prisma/adapter-pg` → PostgreSQL 18 (local: Docker, `docker-compose.yml`)                                           |
 | Hosting   | Not chosen yet; local only (`pnpm dev`, `pnpm preview`)                                                                                                                                                                       |
-| Tooling   | pnpm, Vite 8, ESLint, Prettier, svelte-check                                                                                                                                                                                  |
+| Tooling   | pnpm, Vite 8, Vitest, ESLint, Prettier, svelte-check                                                                                                                                                                          |
 
 ## Architecture
 
@@ -65,6 +65,7 @@ prisma/migrations/         SQL migrations (prisma migrate dev)
 docker-compose.yml         local Postgres 18 for development
 prisma.config.ts           Prisma CLI config: loads .env (dotenv), DATABASE_URL from the environment
 static/                    manifest.webmanifest, icons, robots.txt
+test/unittest/             Vitest tests, same folder layout as src/ (pnpm test, pnpm test:cov)
 components.json            shadcn-svelte config
 vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is chosen)
 ```
@@ -129,6 +130,8 @@ Then open it in Chrome or Edge and use the install icon in the address bar to in
 | `pnpm db:generate` | Regenerate the Prisma client after editing the schema                                            |
 | `pnpm db:migrate`  | `prisma migrate dev` on `DATABASE_URL`: apply migrations, or create one after editing the schema |
 | `pnpm db:studio`   | Browse the database at `DATABASE_URL` in Prisma Studio                                           |
+| `pnpm test`        | Vitest unit + component tests (jsdom), run once                                                  |
+| `pnpm test:cov`    | Same tests with a v8 coverage table in the terminal and an HTML report in `coverage/`            |
 
 ## Database changes
 
