@@ -1,0 +1,15 @@
+node_modules
+build
+.svelte-kit
+.git
+.github
+.claude
+.agents
+.pipeline
+coverage
+.env
+.env.*
+!.env.example
+docs
+test
+*.log

@@ -164,7 +164,9 @@ These clients can't use the browser cookies, so they send tokens in the `Authori
 
 ## Deploy
 
-Not set up yet. When hosting is chosen: add its SvelteKit adapter in `vite.config.ts`, and point `DATABASE_URL` at a hosted Postgres.
+Hosting isn't chosen yet. The app uses `@sveltejs/adapter-node` (set in `vite.config.ts`) and ships as a Docker image (`docker build -t utilities .`, then `docker run -p 3000:3000` with the variables from `.env.example`). Point `DATABASE_URL` at a hosted Postgres.
+
+CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install → lint (`pnpm check`, `pnpm lint`) → unit tests → Docker build → Trivy scan (fails on fixable HIGH/CRITICAL).
 
 ### Production checklist
 
