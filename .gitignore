@@ -25,3 +25,9 @@ vite.config.ts.timestamp-*
 
 # Generated Prisma client
 /src/lib/server/prisma
+
+# Pipeline hand-off files (see .claude/commands/pipeline.md)
+/.pipeline
+
+# Test coverage
+/coverage

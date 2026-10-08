@@ -7,4 +7,5 @@ See [README.md](README.md) for stack, layout and scripts.
 - Don't edit `src/lib/components/ui/*` by hand; re-add with `--overwrite` instead.
 - Service worker lives in `src/service-worker/` with its own tsconfig; it must not import app code.
 - Local `.env`: follow "Local .env" in README.md (reuse `BETTER_AUTH_SECRET` from another checkout's `.env`; never commit `.env*` except `.env.example`, which holds no real secrets).
-- Before finishing: `pnpm check && pnpm lint && pnpm build`.
+- Tests: Vitest, `test/unittest/**/*.test.ts` mirroring the `src/` layout (import code via `#lib/...`), `*.svelte.test.ts` when using runes.
+- Before finishing: `pnpm check && pnpm lint && pnpm test && pnpm build`.
