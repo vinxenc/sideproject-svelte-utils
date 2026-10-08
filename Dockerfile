@@ -1,8 +1,12 @@
 FROM node:22-alpine AS build
 RUN npm install -g pnpm@9
 WORKDIR /app
+# Download dependencies in a layer keyed only by the lockfile, so source edits don't invalidate it.
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch
+# Install from that store; the source must be present first because `prepare` runs prisma generate.
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --offline
 # Placeholder values so the build can validate env var presence; real ones are supplied at runtime.
 RUN DATABASE_URL=build S3_ENDPOINT=build S3_REGION=build S3_BUCKET=build \
     S3_ACCESS_KEY_ID=build S3_SECRET_ACCESS_KEY=build BETTER_AUTH_SECRET=build \

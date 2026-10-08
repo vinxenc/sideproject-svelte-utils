@@ -173,7 +173,7 @@ These clients can't use the browser cookies, so they send tokens in the `Authori
 
 ## Deploy
 
-Hosting isn't chosen yet. The app uses `@sveltejs/adapter-node` (set in `vite.config.ts`) and ships as a Docker image (`docker build -t utilities .`, then `docker run -p 3000:3000` with the variables from `.env.example`). Point `DATABASE_URL` at a hosted Postgres.
+Hosting isn't chosen yet. The app uses `@sveltejs/adapter-node` (set in `vite.config.ts`) and ships as a Docker image (`docker build -t utilities .`, then `docker run --env-file .env -p 3000:3000 utilities`; in that `.env`, replace `localhost` in `DATABASE_URL` and `S3_ENDPOINT` with addresses the container can reach, e.g. `host.docker.internal`). Point `DATABASE_URL` at a hosted Postgres.
 
 CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install → lint (`pnpm check`, `pnpm lint`) → unit tests with the 90% coverage gate (`pnpm test:cov`) → Docker build → Trivy scan (fails on fixable HIGH/CRITICAL).
 
