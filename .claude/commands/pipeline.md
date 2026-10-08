@@ -14,6 +14,7 @@ If `$ARGUMENTS` is empty, ask the user for a feature description and stop — do
 ## Setup
 
 - Run `rm -f .pipeline/specs.md .pipeline/changes.md .pipeline/test-results.md .pipeline/verdict.md && mkdir -p .pipeline` so stale outputs from a previous run can't be consumed. (`.pipeline/` is gitignored.)
+- Record the starting worktree with `git status --porcelain > .pipeline/baseline-status`, so this run's changes can be told apart from edits that were already there.
 - Track progress with a 4-item task list (Planner, Coder, Tester, Reviewer). After each phase, print a line: `[n/4] <emoji> <Phase> — <status>`.
 
 ## Run the phases strictly in order
@@ -36,10 +37,10 @@ Each phase is a **separate subagent**, invoked with the **Agent tool** using the
 Read `.pipeline/verdict.md` and show the verdict to the user.
 
 - **❌ CHANGES REQUESTED** → summarize the required fixes. Offer to loop back: re-run **Coder → Tester → Reviewer**, instructing the Coder to read `.pipeline/verdict.md` and address (or explicitly record as unresolved) every requested fix before re-implementing (max **3** iterations, then stop and hand back to the user). Do **not** commit.
-- **✅ APPROVED** → show the reviewer's recommended commit message and the exact files this run changed (from `.pipeline/changes.md`, cross-checked against `git status`), also tell the user they can run `/code-review ultra` (the multi-agent cloud review, user-triggered and billed; you cannot launch it) before committing, then **ask the user to confirm before committing**. On confirmation, **stage only those files by explicit path** (never `git add -A` / `git add .`), show the staged diff, and `git commit` on the current branch. Abort if the staged set contains anything outside this run's changes, any secret or `.env*` file (other than `.env.example`), or a `.pipeline/` file. **Never `git push`.**
+- **✅ APPROVED** → show the reviewer's recommended commit message and the files this run changed: the source files listed in `.pipeline/changes.md` **plus any source fix the Tester recorded in `.pipeline/test-results.md`**, cross-checked against `git status` minus `.pipeline/baseline-status`. If one of those files was already modified in the baseline, show it to the user and ask before staging it, because `git add` would sweep in their earlier edits. **Stage only those files by explicit path** (never `git add -A` / `git add .`) and show the staged diff. Abort if the staged set contains anything outside this run's changes, any secret or `.env*` file (other than `.env.example`), or a `.pipeline/` file. Also tell the user they can run `/code-review ultra` (the multi-agent cloud review, user-triggered and billed; you cannot launch it) before committing. Then **ask the user to confirm the staged diff**, and only on confirmation `git commit` on the current branch. **Never `git push`.**
 
 ## Guardrails
 
 - Never skip a phase or change the order.
-- The Reviewer is **read-only**. Capture `git status --porcelain` immediately before Phase 4 and again after; if any tracked or untracked file other than `.pipeline/verdict.md` changed during Phase 4, treat the run as invalid and report it. (The Reviewer keeps `Write` only to author `verdict.md` — Claude Code can't scope a tool to a single path, so this before/after check is the enforcement backstop.)
+- The Reviewer is **read-only**. Immediately before Phase 4 capture `git status --porcelain` and `shasum .pipeline/specs.md .pipeline/changes.md .pipeline/test-results.md` (`.pipeline/` is gitignored, so `git status` can't see it), and capture both again after; if any tracked or untracked file, or any of those three handoff files, changed during Phase 4, treat the run as invalid and report it. Only `.pipeline/verdict.md` may change. (The Reviewer keeps `Write` only to author `verdict.md` — Claude Code can't scope a tool to a single path, so this before/after check is the enforcement backstop.)
 - Keep phase contexts isolated — resist "helpfully" doing the next phase's job yourself; delegate it to the right subagent.

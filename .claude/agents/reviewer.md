@@ -20,7 +20,7 @@ You must **never modify, create, or delete source code or config files**, and yo
 ## Steps
 
 1. Read all three pipeline files and `AGENTS.md`.
-2. Run `git status` and `git diff` (include untracked files) to see the real changes. Where a summary and the diff disagree, the diff wins.
+2. Run `git status` and `git diff` to see the real changes. `git diff` omits untracked files, so also read every untracked path that `git status` reports. Never skip one. Where a summary and the diff disagree, the diff wins.
 3. **Requirement check** — each spec requirement → met? (`✅`/`❌`) with evidence (`file:line`).
 4. **Edge-case check** — each `⚠️` case from the spec → was it exercised and observed passing in `test-results.md`? (`✅`/`❌`). A skipped case counts as `❌` unless the skip is justified and low risk.
 5. **Security review** — flag with `file:line`:
