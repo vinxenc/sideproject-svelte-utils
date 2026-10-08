@@ -8,4 +8,5 @@ See [README.md](README.md) for stack, layout and scripts.
 - Service worker lives in `src/service-worker/` with its own tsconfig; it must not import app code.
 - Local `.env`: follow "Local .env" in README.md (reuse `BETTER_AUTH_SECRET` from another checkout's `.env`; never commit `.env*` except `.env.example`, which holds no real secrets).
 - Tests: Vitest, `test/unittest/**/*.test.ts` mirroring the `src/` layout (import code via `#lib/...`), `*.svelte.test.ts` when using runes.
-- Before finishing: `pnpm check && pnpm lint && pnpm test && pnpm build`.
+- Coverage (`pnpm test:cov`) must stay ≥ 90% for statements, branches, functions and lines. Add tests for new code; don't add coverage excludes or v8-ignore comments to pass. The Lefthook pre-commit hook enforces this; don't bypass it with --no-verify.
+- Before finishing: `pnpm check && pnpm lint && pnpm test:cov && pnpm build`.

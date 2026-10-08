@@ -1,0 +1,11 @@
+# Git hooks (https://lefthook.dev), installed into .git/hooks by `pnpm install` (lefthook's postinstall).
+# Skip once with `LEFTHOOK=0 git commit …` or `git commit --no-verify`; CI runs the same checks.
+pre-commit:
+  parallel: true
+  jobs:
+    - name: check
+      run: pnpm check
+    - name: lint
+      run: pnpm lint
+    - name: test
+      run: pnpm test:cov

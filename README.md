@@ -12,7 +12,7 @@ An installable Progressive Web App (PWA) for web, mobile and desktop, built with
 | PWA       | SvelteKit built-in service worker + static web manifest, icons from `@vite-pwa/assets-generator`                                                                                                                              |
 | Auth / DB | [Better Auth](https://www.better-auth.com) (email + password) → [Prisma 7](https://www.prisma.io/docs) + `@prisma/adapter-pg` → PostgreSQL 18 (local: Docker, `docker-compose.yml`)                                           |
 | Hosting   | Not chosen yet; local only (`pnpm dev`, `pnpm preview`)                                                                                                                                                                       |
-| Tooling   | pnpm, Vite 8, Vitest, ESLint, Prettier, svelte-check                                                                                                                                                                          |
+| Tooling   | pnpm, Vite 8, Vitest, ESLint, Prettier, svelte-check, [Lefthook](https://lefthook.dev) (git hooks)                                                                                                                            |
 
 ## Architecture
 
@@ -65,8 +65,9 @@ prisma/migrations/         SQL migrations (prisma migrate dev)
 docker-compose.yml         local Postgres 18 for development
 prisma.config.ts           Prisma CLI config: loads .env (dotenv), DATABASE_URL from the environment
 static/                    manifest.webmanifest, icons, robots.txt
-test/unittest/             Vitest tests, same folder layout as src/ (pnpm test, pnpm test:cov)
+test/unittest/             Vitest tests, same folder layout as src/ (plus setup.ts and helpers/); pnpm test, pnpm test:cov
 components.json            shadcn-svelte config
+lefthook.yml               pre-commit hook: check, lint, unit tests with the coverage gate
 vite.config.ts             SvelteKit + Tailwind (no adapter until hosting is chosen)
 ```
 
@@ -118,20 +119,28 @@ Then open it in Chrome or Edge and use the install icon in the address bar to in
 
 ## Scripts
 
-| Command            | What it does                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------ |
-| `pnpm dev`         | Vite dev server with hot reload                                                                  |
-| `pnpm build`       | Production build into `.svelte-kit/output`                                                       |
-| `pnpm preview`     | Serve the production build from Node on port 4173 (`vite preview`)                               |
-| `pnpm check`       | Type-check (svelte-check)                                                                        |
-| `pnpm lint`        | Prettier check + ESLint                                                                          |
-| `pnpm format`      | Prettier write                                                                                   |
-| `pnpm gen:icons`   | Regenerate PWA icons from `static/icon.svg`                                                      |
-| `pnpm db:generate` | Regenerate the Prisma client after editing the schema                                            |
-| `pnpm db:migrate`  | `prisma migrate dev` on `DATABASE_URL`: apply migrations, or create one after editing the schema |
-| `pnpm db:studio`   | Browse the database at `DATABASE_URL` in Prisma Studio                                           |
-| `pnpm test`        | Vitest unit + component tests (jsdom), run once                                                  |
-| `pnpm test:cov`    | Same tests with a v8 coverage table in the terminal and an HTML report in `coverage/`            |
+| Command            | What it does                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`         | Vite dev server with hot reload                                                                                                                         |
+| `pnpm build`       | Production build into `.svelte-kit/output`                                                                                                              |
+| `pnpm preview`     | Serve the production build from Node on port 4173 (`vite preview`)                                                                                      |
+| `pnpm check`       | Type-check (svelte-check)                                                                                                                               |
+| `pnpm lint`        | Prettier check + ESLint                                                                                                                                 |
+| `pnpm format`      | Prettier write                                                                                                                                          |
+| `pnpm gen:icons`   | Regenerate PWA icons from `static/icon.svg`                                                                                                             |
+| `pnpm db:generate` | Regenerate the Prisma client after editing the schema                                                                                                   |
+| `pnpm db:migrate`  | `prisma migrate dev` on `DATABASE_URL`: apply migrations, or create one after editing the schema                                                        |
+| `pnpm db:studio`   | Browse the database at `DATABASE_URL` in Prisma Studio                                                                                                  |
+| `pnpm test`        | Vitest unit + component tests (jsdom), run once                                                                                                         |
+| `pnpm test:cov`    | Same tests with a v8 coverage table in the terminal and an HTML report in `coverage/`; fails if statements, branches, functions or lines fall below 90% |
+
+### Git hooks
+
+`pnpm install` installs a [Lefthook](https://lefthook.dev) pre-commit hook (`lefthook.yml`) that runs `pnpm check`, `pnpm lint` and `pnpm test:cov` in parallel. It lints the whole repo, including untracked and unstaged files, but a partially staged file is checked as staged.
+
+- Re-install the hook with `pnpm exec lefthook install`.
+- Skip it once with `LEFTHOOK=0 git commit …` or `git commit --no-verify`. CI runs the same checks, so skipping only defers the failure.
+- Git worktrees share one `.git/hooks`. A checkout without `node_modules` prints "Can't find lefthook in PATH" and commits unchecked: run `pnpm install` there.
 
 ## Database changes
 
@@ -166,7 +175,7 @@ These clients can't use the browser cookies, so they send tokens in the `Authori
 
 Hosting isn't chosen yet. The app uses `@sveltejs/adapter-node` (set in `vite.config.ts`) and ships as a Docker image (`docker build -t utilities .`, then `docker run -p 3000:3000` with the variables from `.env.example`). Point `DATABASE_URL` at a hosted Postgres.
 
-CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install → lint (`pnpm check`, `pnpm lint`) → unit tests → Docker build → Trivy scan (fails on fixable HIGH/CRITICAL).
+CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install → lint (`pnpm check`, `pnpm lint`) → unit tests with the 90% coverage gate (`pnpm test:cov`) → Docker build → Trivy scan (fails on fixable HIGH/CRITICAL).
 
 ### Production checklist
 

@@ -27,12 +27,17 @@ export default defineConfig({
 	],
 	test: {
 		include: ['test/unittest/**/*.test.ts'],
+		setupFiles: ['test/unittest/setup.ts'],
 		environment: 'jsdom',
 		restoreMocks: true,
+		unstubGlobals: true, // vi.stubGlobal(...) is undone after every test
 		coverage: {
 			provider: 'v8',
 			include: ['src/**/*.{ts,svelte}'],
-			exclude: ['src/lib/components/ui/**', 'src/lib/server/prisma/**']
+			// Not ours to test: shadcn-generated components (managed by the CLI) and the generated Prisma client.
+			exclude: ['src/lib/components/ui/**', 'src/lib/server/prisma/**'],
+			// The gate: `pnpm test:cov` (pre-commit hook and CI) fails below these.
+			thresholds: { statements: 90, branches: 90, functions: 90, lines: 90 }
 		}
 	}
 });

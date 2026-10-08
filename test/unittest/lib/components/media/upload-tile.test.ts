@@ -51,4 +51,45 @@ describe('UploadTile', () => {
 		expect(screen.getByText('Added · 1.5 KB')).toBeTruthy();
 		expect(screen.queryByRole('button')).toBeNull();
 	});
+
+	it('says a picked file is being previewed, with a placeholder and a remove action', () => {
+		const { container } = render(UploadTile, { row: row({ stage: 'preview' }) });
+		expect(screen.getByText('Preparing preview')).toBeTruthy();
+		expect(container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+		expect(screen.getByRole('button', { name: 'Remove beach.jpg' })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Retry beach.jpg' })).toBeNull();
+	});
+
+	it.each([
+		['queued', 'Waiting'],
+		['preparing', 'Preparing'],
+		['finishing', 'Finishing']
+	] as const)('shows the %s stage as "%s" with no actions', (stage, label) => {
+		render(UploadTile, { row: row({ stage }) });
+		expect(screen.getByText(label)).toBeTruthy();
+		expect(screen.queryByRole('button')).toBeNull();
+	});
+
+	it('shows the thumbnail once one is ready', () => {
+		const { container } = render(UploadTile, {
+			row: row({ stage: 'ready', previewUrl: 'blob:p' })
+		});
+		expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:p');
+	});
+
+	it('shows a video icon and a duration-less badge for a video with no preview yet', () => {
+		const { container } = render(UploadTile, {
+			row: row({ kind: 'VIDEO', stage: 'ready', previewUrl: null, duration: null })
+		});
+		expect(container.querySelector('.lucide-video')).not.toBeNull();
+		expect(container.querySelector('[data-slot="badge"]')).not.toBeNull();
+		expect(container.querySelector('[data-slot="badge"]')?.textContent?.trim()).toBe('');
+	});
+
+	it('puts the error in the description tooltip', () => {
+		const { container } = render(UploadTile, {
+			row: row({ stage: 'error', error: 'Network error while uploading' })
+		});
+		expect(container.querySelector('[title="Network error while uploading"]')).not.toBeNull();
+	});
 });
