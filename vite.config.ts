@@ -9,8 +9,6 @@ import { defineConfig } from 'vitest/config';
 const optimizeDeps = { rolldownOptions: { tsconfig: false } } as const;
 
 export default defineConfig({
-	optimizeDeps,
-	ssr: { optimizeDeps },
 	plugins: [
 		tailwindcss(),
 		sveltekit({
@@ -32,8 +30,7 @@ export default defineConfig({
 		coverage: {
 			provider: 'v8',
 			include: ['src/**/*.{ts,svelte}'],
-			exclude: ['src/lib/components/ui/**'],
-			reporter: ['text', 'html']
+			exclude: ['src/lib/components/ui/**']
 		}
 	}
 });

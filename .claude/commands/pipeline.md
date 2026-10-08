@@ -43,4 +43,3 @@ Read `.pipeline/verdict.md` and show the verdict to the user.
 - Never skip a phase or change the order.
 - The Reviewer is **read-only**. Capture `git status --porcelain` immediately before Phase 4 and again after; if any tracked or untracked file other than `.pipeline/verdict.md` changed during Phase 4, treat the run as invalid and report it. (The Reviewer keeps `Write` only to author `verdict.md` — Claude Code can't scope a tool to a single path, so this before/after check is the enforcement backstop.)
 - Keep phase contexts isolated — resist "helpfully" doing the next phase's job yourself; delegate it to the right subagent.
-- The Tester may start `pnpm preview` on port 4173. Before it does, all listeners on ports 4173 **and** 5173 must be killed (listeners only: `lsof -nP -iTCP:<port> -sTCP:LISTEN -t | xargs kill`); never switch to another port. Make sure nothing the pipeline started is left running afterwards.
