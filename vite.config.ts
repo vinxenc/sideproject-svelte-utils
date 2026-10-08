@@ -30,7 +30,7 @@ export default defineConfig({
 		coverage: {
 			provider: 'v8',
 			include: ['src/**/*.{ts,svelte}'],
-			exclude: ['src/lib/components/ui/**']
+			exclude: ['src/lib/components/ui/**', 'src/lib/server/prisma/**']
 		}
 	}
 });
