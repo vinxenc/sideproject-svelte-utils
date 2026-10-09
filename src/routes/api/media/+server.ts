@@ -1,26 +1,20 @@
 import { error, json } from '@sveltejs/kit';
 import { checkMedia, THUMB_TYPE } from '#lib/media/types.js';
-import type { MediaPage, UploadTicket } from '#lib/media/types.js';
+import type { UploadTicket } from '#lib/media/types.js';
 import { prisma } from '#lib/server/db.js';
-import { MAX_THUMB_BYTES, NO_STORE, originalKey, thumbKey, toItem } from '#lib/server/media.js';
-import type { Media } from '#lib/server/prisma/client.js';
+import {
+	decodeCursor,
+	listMedia,
+	MAX_THUMB_BYTES,
+	NO_STORE,
+	originalKey,
+	thumbKey
+} from '#lib/server/media.js';
 import { presignPut, remove } from '#lib/server/storage.js';
 import type { RequestHandler } from './$types';
 
-const PAGE_SIZE = 60;
 // A PENDING row this old was abandoned: its presigned upload URLs expired long ago.
 const STALE_PENDING_MS = 24 * 60 * 60 * 1000;
-
-// The cursor is the last item's sort key rather than its id, so it keeps working if that item is
-// deleted before the next page is requested.
-const encodeCursor = (m: Pick<Media, 'takenAt' | 'id'>) => `${m.takenAt.getTime()}_${m.id}`;
-
-function decodeCursor(value: string) {
-	const match = /^(-?\d+)_(.+)$/.exec(value);
-	const takenAt = match && new Date(Number(match[1]));
-	if (!match || !takenAt || Number.isNaN(takenAt.getTime())) error(400, 'Invalid cursor');
-	return { takenAt, id: match[2] };
-}
 
 /** Deletes this user's abandoned uploads, objects first so a failure leaves the row for next time. */
 async function purgeStale(userId: string) {
@@ -47,28 +41,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	if (!cursor)
 		await purgeStale(userId).catch((e) => console.error('Purging stale uploads failed', e));
 
-	const rows = await prisma.media.findMany({
-		where: {
-			userId,
-			status: 'READY',
-			...(cursor
-				? {
-						OR: [
-							{ takenAt: { lt: cursor.takenAt } },
-							{ takenAt: cursor.takenAt, id: { lt: cursor.id } }
-						]
-					}
-				: {})
-		},
-		orderBy: [{ takenAt: 'desc' }, { id: 'desc' }],
-		take: PAGE_SIZE + 1
-	});
-	const items = rows.slice(0, PAGE_SIZE);
-	const last = items.at(-1);
-	const page: MediaPage = {
-		items: items.map(toItem),
-		nextCursor: rows.length > PAGE_SIZE && last ? encodeCursor(last) : null
-	};
+	const page = await listMedia({ userId, status: 'READY' }, cursor);
 	return json(page, { headers: NO_STORE });
 };
 

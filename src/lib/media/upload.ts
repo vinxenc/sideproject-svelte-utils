@@ -69,11 +69,13 @@ function put(
  * Uploads one photo or video straight to object storage and returns the finished item. Waits for one
  * of the 3 upload slots first; `onStage` reports where the file is, and `fraction` (0..1) the original's upload.
  * `preparing` is the file's `prepare()`, usually started earlier for its preview and possibly still running.
+ * With `albumId`, the server links the finished item into that album.
  */
 export async function uploadMedia(
 	file: File,
 	preparing: Promise<Prepared>,
-	onStage: (stage: UploadStage, fraction: number) => void
+	onStage: (stage: UploadStage, fraction: number) => void,
+	albumId: string | null = null
 ): Promise<MediaItem> {
 	await acquire();
 	try {
@@ -104,7 +106,11 @@ export async function uploadMedia(
 		]);
 
 		onStage('finishing', 1);
-		return await post<MediaItem>(`/api/media/${ticket.id}/complete`);
+		// Without an album the request has no body, exactly as before albums existed.
+		return await post<MediaItem>(
+			`/api/media/${ticket.id}/complete`,
+			albumId ? { albumId } : undefined
+		);
 	} finally {
 		release();
 	}

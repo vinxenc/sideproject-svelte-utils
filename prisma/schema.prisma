@@ -119,6 +119,7 @@ model Media {
   takenAt     DateTime
   hasThumb    Boolean      @default(false)
   createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @default(now()) @updatedAt
   albums      AlbumMedia[]
   coverOf     Album[]      @relation("AlbumCover")
 
@@ -132,13 +133,16 @@ model Album {
   userId    String
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
-  // Falls back to the album's first item when unset (or when the cover is deleted).
+  // Falls back to the album's first item in display order (newest takenAt) when unset, or when the
+  // cover is deleted or removed from the album.
   coverId   String?
   cover     Media?       @relation("AlbumCover", fields: [coverId], references: [id], onDelete: SetNull)
   createdAt DateTime     @default(now())
+  updatedAt DateTime     @default(now()) @updatedAt
   media     AlbumMedia[]
 
-  @@index([userId])
+  // The album list: one user's albums, most recently changed first, paged by (updatedAt, id).
+  @@index([userId, updatedAt(sort: Desc), id(sort: Desc)])
   @@map("album")
 }
 

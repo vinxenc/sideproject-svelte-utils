@@ -14,6 +14,7 @@ const row = (overrides: Partial<Row>): Row => ({
 	stage: 'ready',
 	progress: 0,
 	error: '',
+	album: null,
 	...overrides
 });
 

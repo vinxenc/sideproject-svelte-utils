@@ -161,10 +161,38 @@ describe('uploads', () => {
 
 		gate.resolve(ITEM);
 		await vi.waitFor(() => expect(uploads.rows).toHaveLength(0));
-		expect(onuploaded).toHaveBeenCalledWith(ITEM);
+		expect(onuploaded).toHaveBeenCalledWith(ITEM, null);
 		expect(uploads.open).toBe(false);
 		expect(toast.success).toHaveBeenCalledWith('Added 1 item to the gallery');
 		detach();
+	});
+
+	it('sends a file picked for an album into it, and says so once it is done', async () => {
+		const onuploaded = vi.fn();
+		const detach = uploads.attach(onuploaded);
+		uploads.add([photo()], { id: 'a1', name: 'Trip' });
+		await vi.waitFor(() => expect(uploads.rows[0].stage).toBe('ready'));
+		expect(uploads.rows[0].album).toEqual({ id: 'a1', name: 'Trip' });
+
+		uploads.submit();
+
+		await vi.waitFor(() => expect(uploads.rows).toHaveLength(0));
+		expect(vi.mocked(uploadMedia).mock.calls.at(-1)?.[3]).toBe('a1');
+		expect(onuploaded).toHaveBeenCalledWith(ITEM, 'a1');
+		expect(toast.success).toHaveBeenCalledWith('Added 1 item to "Trip"');
+		detach();
+	});
+
+	it('uses the library message when one round mixes an album and the library', async () => {
+		uploads.add([photo('a.jpg')], { id: 'a1', name: 'Trip' });
+		uploads.add([photo('b.jpg')]);
+		await vi.waitFor(() => expect(uploads.pending).toHaveLength(2));
+
+		uploads.submit();
+
+		await vi.waitFor(() =>
+			expect(toast.success).toHaveBeenCalledWith('Added 2 items to the gallery')
+		);
 	});
 
 	it('counts every item in the success message', async () => {

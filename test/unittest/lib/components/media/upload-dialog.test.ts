@@ -122,7 +122,7 @@ describe('UploadDialog submitting', () => {
 
 		await waitFor(() => expect(screen.queryByText('Add to gallery')).toBeNull());
 		expect(toast.success).toHaveBeenCalledWith('Added 1 item to the gallery');
-		expect(onuploaded).toHaveBeenCalledWith(ITEM);
+		expect(onuploaded).toHaveBeenCalledWith(ITEM, null);
 	});
 
 	it('cancelling forgets the selection and closes', async () => {
@@ -216,5 +216,36 @@ describe('UploadDialog camera', () => {
 
 		await waitFor(() => expect(screen.queryByText('Add to gallery')).toBeNull());
 		expect(uploads.rows).toHaveLength(0);
+	});
+});
+
+describe('UploadDialog in an album', () => {
+	it('titles the dialog for the album, and labels the add button with it', async () => {
+		render(UploadDialog, { onuploaded: vi.fn(), album: { id: 'a1', name: 'Trip' } });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Add photos and videos to Trip' }));
+
+		expect(await screen.findByText('Add to "Trip"')).toBeTruthy();
+		expect(
+			screen.getByText('New photos and videos go into this album and your library.')
+		).toBeTruthy();
+	});
+
+	it('sends the picked files into the album', async () => {
+		render(UploadDialog, { onuploaded: vi.fn(), album: { id: 'a1', name: 'Trip' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Add photos and videos to Trip' }));
+		await screen.findByText('Add to "Trip"');
+
+		await pick(photo());
+
+		expect(uploads.rows[0].album).toEqual({ id: 'a1', name: 'Trip' });
+	});
+
+	it('hides the round add button while the gallery is selecting, but keeps the dialog mounted', () => {
+		render(UploadDialog, { onuploaded: vi.fn(), hideTrigger: true });
+
+		expect(screen.getByRole('button', { name: 'Add photos and videos' }).className).toContain(
+			'hidden'
+		);
 	});
 });

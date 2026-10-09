@@ -1,9 +1,13 @@
 <script lang="ts">
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
+	import FolderMinusIcon from '@lucide/svelte/icons/folder-minus';
+	import FolderPlusIcon from '@lucide/svelte/icons/folder-plus';
 	import ImageOffIcon from '@lucide/svelte/icons/image-off';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import type { MediaItem } from '#lib/media/types.js';
 	import MediaImage from './media-image.svelte';
@@ -12,14 +16,22 @@
 		items,
 		openId = $bindable(null),
 		hasMore,
-		onloadmore
+		onloadmore,
+		onaddtoalbum,
+		onremovefromalbum
 	}: {
 		items: MediaItem[];
 		/** The item being viewed, or null when closed. Tracked by id so an upload or delete can't shift it. */
 		openId?: string | null;
 		hasMore: boolean;
 		onloadmore: () => void;
+		/** Given to show the ⋯ menu with "Add to album". */
+		onaddtoalbum?: (id: string) => void;
+		/** Given (in an album) to add "Remove from album" to the ⋯ menu. */
+		onremovefromalbum?: (id: string) => void;
 	} = $props();
+
+	let contentRef: HTMLElement | null = $state(null);
 
 	const index = $derived(openId === null ? -1 : items.findIndex((i) => i.id === openId));
 	const item = $derived(items[index]);
@@ -36,6 +48,19 @@
 		// Arrow keys seek inside a focused video, and with a modifier they belong to the browser (Alt+Left is Back).
 		if (openId === null || event.target instanceof HTMLVideoElement) return;
 		if (event.altKey || event.ctrlKey || event.metaKey) return;
+		// Typing, a menu, or another dialog on top (e.g. the album picker) owns the arrow keys.
+		if (event.target instanceof HTMLElement) {
+			const target = event.target;
+			if (
+				target instanceof HTMLInputElement ||
+				target instanceof HTMLTextAreaElement ||
+				target.isContentEditable ||
+				target.closest('[role="menu"]')
+			)
+				return;
+			const dialog = target.closest('[role="dialog"], [role="alertdialog"]');
+			if (dialog && !contentRef?.contains(target)) return;
+		}
 		if (event.key === 'ArrowLeft') go(-1);
 		else if (event.key === 'ArrowRight') go(1);
 	}
@@ -66,6 +91,7 @@
 	}}
 >
 	<Dialog.Content
+		bind:ref={contentRef}
 		class="top-0 left-0 flex h-svh w-svw max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none p-0 ring-0 sm:max-w-none"
 	>
 		{#if item}
@@ -158,6 +184,33 @@
 				<span class="shrink-0 text-muted-foreground">
 					{new Date(item.takenAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
 				</span>
+				{#if onaddtoalbum || onremovefromalbum}
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="ghost" size="icon-sm" aria-label="More options">
+									<EllipsisIcon />
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end">
+							<DropdownMenu.Group>
+								{#if onaddtoalbum}
+									<DropdownMenu.Item onSelect={() => onaddtoalbum(item.id)}>
+										<FolderPlusIcon />
+										Add to album
+									</DropdownMenu.Item>
+								{/if}
+								{#if onremovefromalbum}
+									<DropdownMenu.Item onSelect={() => onremovefromalbum(item.id)}>
+										<FolderMinusIcon />
+										Remove from album
+									</DropdownMenu.Item>
+								{/if}
+							</DropdownMenu.Group>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				{/if}
 			</div>
 		{/if}
 	</Dialog.Content>
