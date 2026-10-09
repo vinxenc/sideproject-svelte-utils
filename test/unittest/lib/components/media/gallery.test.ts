@@ -1,11 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { flushSync } from 'svelte';
+import { createRawSnippet, flushSync } from 'svelte';
 import { toast } from 'svelte-sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Gallery from '#lib/components/media/gallery.svelte';
 import { uploads } from '#lib/media/uploads.svelte.js';
 import type { MediaItem, MediaPage } from '#lib/media/types.js';
 import { FakeIntersectionObserver, intersect } from '../../../helpers/dom.js';
+import { albumSummary } from '../../../helpers/albums.js';
 import { deferred, mediaItem } from '../../../helpers/media.js';
 
 vi.mock('svelte-sonner', () => ({
@@ -20,7 +21,7 @@ const a = mediaItem({ id: 'a', name: 'a.jpg', takenAt: '2024-05-03T10:00:00.000Z
 const b = mediaItem({ id: 'b', name: 'b.jpg', takenAt: '2024-05-02T10:00:00.000Z' });
 const c = mediaItem({ id: 'c', name: 'c.jpg', takenAt: '2024-05-01T10:00:00.000Z' });
 
-const fetchMock = vi.fn<(url: string) => Promise<Response>>();
+const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
 
 /** Serves each URL from `pages`, keyed by the cursor it was asked with ('' for the first page). */
 function servePages(pages: Record<string, MediaPage | Response | Promise<Response>>) {
@@ -215,6 +216,33 @@ describe('Gallery lightbox', () => {
 
 		expect(await screen.findByRole('heading', { name: 'b.jpg' })).toBeTruthy();
 	});
+
+	it('stacks the album picker above the lightbox it was opened from', async () => {
+		fetchMock.mockImplementation(async (url: string) =>
+			url.startsWith('/api/albums?')
+				? json({ items: [], nextCursor: null })
+				: json({ items: [a, b], nextCursor: null })
+		);
+		render(Gallery);
+		await screen.findByTitle('b.jpg');
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+		const lightboxTitle = await screen.findByRole('heading', { name: 'b.jpg' });
+
+		await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to album' }));
+		const pickerTitle = await screen.findByRole('heading', { name: 'Add 1 item to an album' });
+
+		// Both dialogs sit at z-50, so the one later in the document paints on top.
+		const lightbox = lightboxTitle.closest('[role="dialog"]')!;
+		const picker = pickerTitle.closest('[role="dialog"]')!;
+		expect(
+			lightbox.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
 });
 
 describe('Gallery paging from the lightbox', () => {
@@ -233,5 +261,174 @@ describe('Gallery paging from the lightbox', () => {
 		await fireEvent.keyDown(window, { key: 'ArrowRight' });
 
 		await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/media?cursor=c1'));
+	});
+});
+
+describe('Gallery in an album', () => {
+	it('loads the album media from the album endpoint', async () => {
+		servePages({ '': { items: [a], nextCursor: null } });
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
+
+		await screen.findByTitle('a.jpg');
+		expect(fetchMock.mock.calls[0][0]).toBe('/api/albums/a1/media');
+	});
+
+	it('shows the empty state once the album has loaded with nothing in it', async () => {
+		servePages({ '': { items: [], nextCursor: null } });
+		render(Gallery, {
+			props: {
+				album: { id: 'a1', name: 'Trip' },
+				empty: createRawSnippet(() => ({ render: () => '<p>Nothing here yet</p>' }))
+			}
+		});
+
+		expect(await screen.findByText('Nothing here yet')).toBeTruthy();
+	});
+
+	it('renders the heading beside the Select button', async () => {
+		servePages({ '': { items: [a], nextCursor: null } });
+		render(Gallery, {
+			props: {
+				heading: createRawSnippet(() => ({ render: () => '<h2>Library</h2>' }))
+			}
+		});
+
+		expect(screen.getByRole('heading', { name: 'Library' })).toBeTruthy();
+		await screen.findByTitle('a.jpg');
+	});
+
+	it('takes only the uploads that went into this album', async () => {
+		servePages({ '': { items: [a], nextCursor: null } });
+		const attach = vi.spyOn(uploads, 'attach');
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
+		await screen.findByTitle('a.jpg');
+		const insert = attach.mock.calls[0][0] as (item: MediaItem, albumId: string | null) => void;
+
+		insert(b, 'other');
+		flushSync();
+		expect(tileNames(document.body)).toEqual(['a.jpg']);
+
+		insert(c, 'a1');
+		flushSync();
+		expect(tileNames(document.body)).toEqual(['a.jpg', 'c.jpg']);
+	});
+});
+
+describe('Gallery select mode', () => {
+	const trip = albumSummary({ id: 'a1', name: 'Trip' });
+
+	it('shows the selection bar with the count, and hides the round add button', async () => {
+		servePages({ '': { items: [a, b], nextCursor: null } });
+		await renderGallery();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+		expect(screen.getByText('0 selected')).toBeTruthy();
+		expect(
+			(screen.getByRole('button', { name: 'Add to album' }) as HTMLButtonElement).disabled
+		).toBe(true);
+		await fireEvent.click(screen.getByTitle('a.jpg'));
+
+		expect(screen.getByText('1 selected')).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Add photos and videos' }).className).toContain(
+			'hidden'
+		);
+	});
+
+	it('adds the selection to an album from the picker, then leaves select mode', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+			if (init?.method === 'POST') return json({ added: 2 });
+			if (url.startsWith('/api/albums?')) return json({ items: [trip], nextCursor: null });
+			return json({ items: [a, b], nextCursor: null });
+		});
+		const onalbumschanged = vi.fn();
+		render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('b.jpg');
+		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+		await fireEvent.click(screen.getByTitle('a.jpg'));
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Add to album' }));
+		await fireEvent.click(await screen.findByRole('button', { name: /Trip/ }));
+
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 2 items to "Trip"'));
+		expect(onalbumschanged).toHaveBeenCalled();
+		expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy();
+	});
+
+	it('removes the selection from the album, keeping the photos and toasting the count', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+			init?.method === 'DELETE' ? json({ removed: 1 }) : json({ items: [a, b], nextCursor: null })
+		);
+		const onalbumschanged = vi.fn();
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' }, onalbumschanged } });
+		await screen.findByTitle('b.jpg');
+		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+		await fireEvent.click(screen.getByTitle('a.jpg'));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+		await waitFor(() => expect(tileNames(document.body)).toEqual(['b.jpg']));
+		expect(toast.success).toHaveBeenCalledWith('Removed 1 item from "Trip"');
+		expect(onalbumschanged).toHaveBeenCalled();
+		const del = fetchMock.mock.calls.find(([, init]) => init?.method === 'DELETE');
+		expect(del?.[0]).toBe('/api/albums/a1/items');
+	});
+
+	it('says nothing when none of the selection was in the album', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE' ? json({ removed: 0 }) : json({ items: [a], nextCursor: null })
+		);
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
+		await screen.findByTitle('a.jpg');
+		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+		await fireEvent.click(screen.getByTitle('a.jpg'));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+		await waitFor(() =>
+			expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'DELETE')).toBe(true)
+		);
+		await new Promise((r) => setTimeout(r, 0));
+		expect(toast.success).not.toHaveBeenCalled();
+	});
+
+	it('reports a failed removal and keeps the photos', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ status: 404, message: 'Not found' }, 404)
+				: json({ items: [a], nextCursor: null })
+		);
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
+		await screen.findByTitle('a.jpg');
+		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+		await fireEvent.click(screen.getByTitle('a.jpg'));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't remove from the album", {
+				description: 'Not found'
+			})
+		);
+		expect(tileNames(document.body)).toEqual(['a.jpg']);
+	});
+
+	it('moves the open lightbox to the next item when its photo is removed', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ removed: 1 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
+		await screen.findByTitle('b.jpg');
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+		expect(await screen.findByRole('heading', { name: 'b.jpg' })).toBeTruthy();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+		expect(await screen.findByRole('heading', { name: 'c.jpg' })).toBeTruthy();
 	});
 });

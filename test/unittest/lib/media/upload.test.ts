@@ -263,6 +263,20 @@ describe('uploadMedia', () => {
 		expect(fetchMock).toHaveBeenLastCalledWith('/api/media/m1/complete', { method: 'POST' });
 	});
 
+	it('links the finished upload into the album it was picked for', async () => {
+		const run = uploadMedia(file, Promise.resolve(prepared()), vi.fn(), 'a1');
+		const [original, thumb] = await puts();
+		original.respond(200);
+		thumb.respond(200);
+		await run;
+
+		expect(fetchMock).toHaveBeenLastCalledWith('/api/media/m1/complete', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ albumId: 'a1' })
+		});
+	});
+
 	it('keeps at most three uploads in their preparing stage at once, and hands a slot on as soon as one ends', async () => {
 		FakeXHR.autoStatus = 200;
 		const preps = [0, 1, 2, 3].map(() => deferred<Prepared>());

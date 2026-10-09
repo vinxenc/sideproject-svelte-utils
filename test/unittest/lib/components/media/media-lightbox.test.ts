@@ -253,3 +253,93 @@ describe('MediaLightbox edge cases', () => {
 		expect(screen.queryByRole('heading')).toBeNull();
 	});
 });
+
+describe('MediaLightbox album menu', () => {
+	it('has no menu when it is given no album actions', () => {
+		open('a');
+
+		expect(screen.queryByRole('button', { name: 'More options' })).toBeNull();
+	});
+
+	it('offers Add to album, and calls back with the viewed item', async () => {
+		const onaddtoalbum = vi.fn();
+		render(MediaLightbox, {
+			items: three,
+			openId: 'b',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			onaddtoalbum
+		} as never);
+
+		await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to album' }));
+
+		expect(onaddtoalbum).toHaveBeenCalledWith('b');
+	});
+
+	it('offers Remove from album only when it is given', async () => {
+		const onremovefromalbum = vi.fn();
+		render(MediaLightbox, {
+			items: three,
+			openId: 'a',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			onaddtoalbum: vi.fn(),
+			onremovefromalbum
+		} as never);
+
+		await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from album' }));
+
+		expect(onremovefromalbum).toHaveBeenCalledWith('a');
+	});
+});
+
+describe('MediaLightbox arrow keys owned by other controls', () => {
+	it('leaves the arrows to a text field', async () => {
+		open('a');
+		const field = document.createElement('input');
+		document.body.appendChild(field);
+
+		await fireEvent.keyDown(field, { key: 'ArrowRight' });
+
+		expect(screen.getByRole('heading', { name: 'a.jpg' })).toBeTruthy();
+		field.remove();
+	});
+
+	it('leaves the arrows to an open menu', async () => {
+		open('a');
+		const menu = document.createElement('div');
+		menu.setAttribute('role', 'menu');
+		const item = document.createElement('div');
+		menu.appendChild(item);
+		document.body.appendChild(menu);
+
+		await fireEvent.keyDown(item, { key: 'ArrowRight' });
+
+		expect(screen.getByRole('heading', { name: 'a.jpg' })).toBeTruthy();
+		menu.remove();
+	});
+
+	it('leaves the arrows to a dialog opened on top of the lightbox', async () => {
+		open('a');
+		const other = document.createElement('div');
+		other.setAttribute('role', 'dialog');
+		const field = document.createElement('input');
+		other.appendChild(field);
+		document.body.appendChild(other);
+
+		await fireEvent.keyDown(field, { key: 'ArrowRight' });
+
+		expect(screen.getByRole('heading', { name: 'a.jpg' })).toBeTruthy();
+		other.remove();
+	});
+});

@@ -3,7 +3,10 @@ import { POST } from '../../../../../../../src/routes/api/media/[id]/complete/+s
 import { mediaRow } from '../../../../../helpers/media.js';
 
 const db = vi.hoisted(() => ({
-	media: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() }
+	media: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+	album: { findFirst: vi.fn(), update: vi.fn() },
+	albumMedia: { create: vi.fn() },
+	$transaction: vi.fn()
 }));
 const storage = vi.hoisted(() => ({ head: vi.fn(), remove: vi.fn() }));
 vi.mock('#lib/server/db.js', () => ({ prisma: db }));
@@ -13,12 +16,14 @@ type Ev = Parameters<typeof POST>[0];
 
 const MAX_THUMB_BYTES = 2 * 1024 * 1024;
 
-function event(user: { id: string } | null = { id: 'u1' }): Ev {
+function event(user: { id: string } | null = { id: 'u1' }, body?: unknown): Ev {
+	const init: RequestInit = { method: 'POST' };
+	if (body !== undefined) init.body = JSON.stringify(body);
 	return {
 		locals: { user },
 		url: new URL('http://localhost/api/media/m1/complete'),
 		params: { id: 'm1' },
-		request: new Request('http://localhost/api/media/m1/complete', { method: 'POST' })
+		request: new Request('http://localhost/api/media/m1/complete', init)
 	} as unknown as Ev;
 }
 
@@ -38,6 +43,13 @@ beforeEach(() => {
 		);
 	db.media.delete.mockReset().mockResolvedValue(mediaRow());
 	storage.remove.mockReset().mockResolvedValue(undefined);
+	db.album.findFirst.mockReset().mockResolvedValue({ id: 'a1' });
+	db.album.update.mockReset().mockResolvedValue({});
+	db.albumMedia.create.mockReset().mockResolvedValue({});
+	// The array form of $transaction: the operations run in order and their results are returned.
+	db.$transaction
+		.mockReset()
+		.mockImplementation(async (ops: Promise<unknown>[]) => Promise.all(ops));
 	objects({ size: 1000 });
 });
 
@@ -132,5 +144,64 @@ describe('POST /api/media/:id/complete', () => {
 			takenAt: '2024-05-01T10:00:00.000Z',
 			hasThumb: false
 		});
+	});
+
+	it('links the upload into the album in one transaction and bumps the album', async () => {
+		const res = await POST(event({ id: 'u1' }, { albumId: 'a1' }));
+
+		expect(db.album.findFirst).toHaveBeenCalledWith({
+			where: { id: 'a1', userId: 'u1' },
+			select: { id: true }
+		});
+		expect(db.$transaction).toHaveBeenCalledTimes(1);
+		expect(db.media.update).toHaveBeenCalledWith({
+			where: { id: 'm1' },
+			data: { status: 'READY', hasThumb: false }
+		});
+		expect(db.albumMedia.create).toHaveBeenCalledWith({
+			data: { albumId: 'a1', mediaId: 'm1' }
+		});
+		expect(db.album.update).toHaveBeenCalledWith({
+			where: { id: 'a1' },
+			data: { updatedAt: expect.any(Date) }
+		});
+		expect(res.status).toBe(200);
+	});
+
+	it("ignores an album that is missing or not the caller's, and completes unlinked", async () => {
+		db.album.findFirst.mockResolvedValue(null);
+
+		const res = await POST(event({ id: 'u1' }, { albumId: 'foreign' }));
+
+		expect(db.$transaction).not.toHaveBeenCalled();
+		expect(db.albumMedia.create).not.toHaveBeenCalled();
+		expect(db.media.update).toHaveBeenCalledWith({
+			where: { id: 'm1' },
+			data: { status: 'READY', hasThumb: false }
+		});
+		expect(res.status).toBe(200);
+	});
+
+	it('completes unlinked when the body is not an album reference', async () => {
+		await POST(event({ id: 'u1' }, 'not-an-object'));
+		await POST(event({ id: 'u1' }, { albumId: 42 }));
+
+		expect(db.album.findFirst).not.toHaveBeenCalled();
+		expect(db.media.update).toHaveBeenCalledTimes(2);
+	});
+
+	it('finishes the upload unlinked when the album disappears before the link', async () => {
+		const failure = Object.assign(new Error('gone'), { code: 'P2003' });
+		db.$transaction.mockRejectedValueOnce(failure);
+		const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const res = await POST(event({ id: 'u1' }, { albumId: 'a1' }));
+
+		expect(log).toHaveBeenCalledWith('Linking the upload to its album failed', failure);
+		expect(db.media.update).toHaveBeenCalledWith({
+			where: { id: 'm1' },
+			data: { status: 'READY', hasThumb: false }
+		});
+		expect(res.status).toBe(200);
 	});
 });

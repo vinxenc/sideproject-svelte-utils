@@ -1,7 +1,10 @@
 <script lang="ts">
+	import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+	import CircleIcon from '@lucide/svelte/icons/circle';
 	import ImageIcon from '@lucide/svelte/icons/image';
 	import PlayIcon from '@lucide/svelte/icons/play';
 	import VideoIcon from '@lucide/svelte/icons/video';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { formatDuration } from '#lib/media/format.js';
@@ -15,7 +18,10 @@
 		hasMore,
 		loading,
 		onopen,
-		onloadmore
+		onloadmore,
+		selecting = false,
+		selected = new SvelteSet<string>(),
+		ontoggle
 	}: {
 		items: MediaItem[];
 		/** Whether to keep requesting pages as the end of the grid scrolls into view. */
@@ -23,6 +29,10 @@
 		loading: boolean;
 		onopen: (id: string) => void;
 		onloadmore: () => void;
+		/** Select mode: a tap toggles the tile instead of opening it. */
+		selecting?: boolean;
+		selected?: ReadonlySet<string>;
+		ontoggle?: (id: string) => void;
 	} = $props();
 
 	let width = $state(0);
@@ -75,7 +85,10 @@
 				style:width="{layout.colWidth}px"
 				style:height="{tile.height}px"
 				title={item.name}
-				onclick={() => onopen(item.id)}
+				aria-pressed={selecting ? selected.has(item.id) : undefined}
+				class:ring-3={selecting && selected.has(item.id)}
+				class:ring-primary={selecting && selected.has(item.id)}
+				onclick={() => (selecting ? ontoggle?.(item.id) : onopen(item.id))}
 			>
 				{#if item.hasThumb}
 					<MediaImage
@@ -90,6 +103,15 @@
 					</MediaImage>
 				{:else}
 					{@render placeholderIcon(item)}
+				{/if}
+				{#if selecting}
+					<span class="absolute top-2 right-2 rounded-full bg-background/80">
+						{#if selected.has(item.id)}
+							<CircleCheckIcon class="text-primary" />
+						{:else}
+							<CircleIcon class="text-muted-foreground" />
+						{/if}
+					</span>
 				{/if}
 				{#if item.kind === 'VIDEO'}
 					<Badge variant="secondary" class="absolute bottom-2 left-2">

@@ -198,3 +198,33 @@ describe('MediaGrid updates', () => {
 		expect(container.querySelector('[data-slot="badge"]')?.textContent?.trim()).toBe('');
 	});
 });
+
+describe('MediaGrid selecting', () => {
+	it('toggles a tile instead of opening it, and shows which tiles are selected', async () => {
+		const onopen = vi.fn();
+		const ontoggle = vi.fn();
+		const { container } = setup({
+			items: [mediaItem({ id: 'a', name: 'a.jpg' }), mediaItem({ id: 'b', name: 'b.jpg' })],
+			onopen,
+			selecting: true,
+			selected: new Set(['a']),
+			ontoggle
+		});
+
+		const [first, second] = tiles(container);
+		expect(first.getAttribute('aria-pressed')).toBe('true');
+		expect(first.className).toContain('ring-primary');
+		expect(second.getAttribute('aria-pressed')).toBe('false');
+		expect(second.className).not.toContain('ring-primary');
+
+		await fireEvent.click(second);
+		expect(ontoggle).toHaveBeenCalledWith('b');
+		expect(onopen).not.toHaveBeenCalled();
+	});
+
+	it('marks no tile as pressed outside select mode', () => {
+		const { container } = setup({ items: [mediaItem({ id: 'a', name: 'a.jpg' })] });
+
+		expect(tiles(container)[0].hasAttribute('aria-pressed')).toBe(false);
+	});
+});

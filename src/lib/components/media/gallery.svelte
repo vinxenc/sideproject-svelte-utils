@@ -1,10 +1,34 @@
 <script lang="ts">
+	import FolderMinusIcon from '@lucide/svelte/icons/folder-minus';
+	import FolderPlusIcon from '@lucide/svelte/icons/folder-plus';
 	import { onMount } from 'svelte';
+	import type { Snippet } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { toast } from 'svelte-sonner';
+	import { removeFromAlbum } from '#lib/albums/api.js';
+	import { formatCount } from '#lib/albums/format.js';
+	import AddToAlbumDialog from '#lib/components/albums/add-to-album-dialog.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import type { MediaItem, MediaPage } from '#lib/media/types.js';
 	import MediaGrid from './media-grid.svelte';
 	import MediaLightbox from './media-lightbox.svelte';
 	import UploadDialog from './upload-dialog.svelte';
+
+	let {
+		album,
+		heading,
+		empty,
+		onalbumschanged
+	}: {
+		/** Show only this album's items, and upload into it. */
+		album?: { id: string; name: string };
+		/** Left side of the toolbar row (the Select button is on the right). */
+		heading?: Snippet;
+		/** Shown instead of the empty skeleton grid once the first page is loaded and there are no items. */
+		empty?: Snippet;
+		/** An add-to-album happened (for the strip to refresh). */
+		onalbumschanged?: () => void;
+	} = $props();
 
 	let items = $state.raw<MediaItem[]>([]);
 	let cursor = $state<string | null>(null);
@@ -16,6 +40,17 @@
 	let error = $state('');
 	let openId = $state<string | null>(null);
 
+	const endpoint = $derived(
+		album ? `/api/albums/${encodeURIComponent(album.id)}/media` : '/api/media'
+	);
+
+	// Select mode: tiles toggle instead of opening, and a bar acts on the selection.
+	let selecting = $state(false);
+	const selected = new SvelteSet<string>();
+	let pickerOpen = $state(false);
+	let pickerIds = $state.raw<string[]>([]);
+	let removing = $state(false);
+
 	// One id, so repeated failures replace the toast instead of stacking up.
 	const LOAD_ERROR_TOAST = 'gallery-load-error';
 
@@ -25,7 +60,7 @@
 		error = '';
 		try {
 			const res = await fetch(
-				cursor ? `/api/media?cursor=${encodeURIComponent(cursor)}` : '/api/media'
+				cursor ? `${endpoint}?cursor=${encodeURIComponent(cursor)}` : endpoint
 			);
 			if (!res.ok) throw new Error(`The server answered ${res.status}`);
 			const page: MediaPage = await res.json();
@@ -62,25 +97,136 @@
 
 	// The loaded items are the start of the full list, so a new upload belongs in them only if it
 	// sorts before the last one (or nothing more is left to load); otherwise a later page brings it.
-	function insert(item: MediaItem) {
+	// In an album, only uploads that went into this album belong here.
+	function insert(item: MediaItem, rowAlbumId: string | null) {
+		if (album && rowAlbumId !== album.id) return;
 		const last = items.at(-1);
 		if (items.some((i) => i.id === item.id)) return;
 		if (!done && last && newestFirst(item, last) > 0) return;
 		items = [...items, item].sort(newestFirst);
 	}
+
+	function toggleSelect() {
+		selecting = !selecting;
+		selected.clear();
+	}
+
+	function openPicker(ids: string[]) {
+		pickerIds = ids;
+		pickerOpen = true;
+	}
+
+	/** Takes the removed items out of the list, and moves the open lightbox off them. */
+	function dropLocal(ids: string[]) {
+		const before = items;
+		items = items.filter((i) => !ids.includes(i.id));
+		if (openId !== null && ids.includes(openId)) {
+			const index = before.findIndex((i) => i.id === openId);
+			const keep = (i: MediaItem) => !ids.includes(i.id);
+			openId =
+				before.slice(index + 1).find(keep)?.id ?? before.slice(0, index).findLast(keep)?.id ?? null;
+		}
+	}
+
+	async function remove(ids: string[]) {
+		if (!album || removing) return;
+		removing = true;
+		try {
+			const n = await removeFromAlbum(album.id, ids);
+			dropLocal(ids);
+			selected.clear();
+			selecting = false;
+			if (n > 0) {
+				toast.success(`Removed ${formatCount(n)} from "${album.name}"`);
+				// Removing moves the album to the front of the strip.
+				onalbumschanged?.();
+			}
+		} catch (e) {
+			toast.error("Couldn't remove from the album", {
+				description: e instanceof Error ? e.message : 'Something went wrong'
+			});
+		} finally {
+			removing = false;
+		}
+	}
 </script>
 
-<!-- Bottom padding keeps the last row clear of the round add button. -->
+<!-- Bottom padding keeps the last row clear of the round add button and the selection bar. -->
 <div class="flex flex-col gap-4 pb-24">
-	<UploadDialog onuploaded={insert} />
+	<div class="flex min-w-0 items-center gap-2">
+		<div class="min-w-0 flex-1">{@render heading?.()}</div>
+		<Button
+			variant="ghost"
+			size="sm"
+			onclick={toggleSelect}
+			disabled={!selecting && items.length === 0}
+		>
+			{selecting ? 'Cancel' : 'Select'}
+		</Button>
+	</div>
 
-	<MediaGrid
-		{items}
-		hasMore={loaded && !done && !error}
-		{loading}
-		onopen={(id) => (openId = id)}
-		onloadmore={load}
-	/>
+	<!-- Never unmounted: unmounting would detach the upload store from this page. -->
+	<UploadDialog onuploaded={insert} {album} hideTrigger={selecting} />
+
+	{#if loaded && items.length === 0 && empty}
+		{@render empty()}
+	{:else}
+		<MediaGrid
+			{items}
+			hasMore={loaded && !done && !error}
+			{loading}
+			onopen={(id) => (openId = id)}
+			onloadmore={load}
+			{selecting}
+			{selected}
+			ontoggle={(id) => {
+				if (selected.has(id)) selected.delete(id);
+				else selected.add(id);
+			}}
+		/>
+	{/if}
 </div>
 
-<MediaLightbox {items} bind:openId hasMore={!done} onloadmore={load} />
+{#if selecting}
+	<div
+		class="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 mx-auto flex w-fit items-center gap-2 rounded-full border bg-background px-3 py-2 shadow-lg"
+	>
+		<span class="text-sm">{selected.size} selected</span>
+		<Button size="sm" disabled={selected.size === 0} onclick={() => openPicker([...selected])}>
+			<FolderPlusIcon data-icon="inline-start" />
+			Add to album
+		</Button>
+		{#if album}
+			<Button
+				size="sm"
+				variant="outline"
+				disabled={selected.size === 0 || removing}
+				onclick={() => remove([...selected])}
+			>
+				<FolderMinusIcon data-icon="inline-start" />
+				Remove
+			</Button>
+		{/if}
+	</div>
+{/if}
+
+<MediaLightbox
+	{items}
+	bind:openId
+	hasMore={!done}
+	onloadmore={load}
+	onaddtoalbum={(id) => openPicker([id])}
+	onremovefromalbum={album ? (id) => remove([id]) : undefined}
+/>
+
+<!-- After the lightbox on purpose: portalled dialogs stack in template order (same z-index), so the picker opened from the lightbox menu must come later in the DOM. -->
+<AddToAlbumDialog
+	bind:open={pickerOpen}
+	mediaIds={pickerIds}
+	excludeAlbumId={album?.id}
+	onadded={() => {
+		selecting = false;
+		selected.clear();
+		onalbumschanged?.();
+	}}
+/>

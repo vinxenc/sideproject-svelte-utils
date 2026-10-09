@@ -9,8 +9,19 @@
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import type { MediaItem } from '#lib/media/types.js';
 	import { uploads } from '#lib/media/uploads.svelte.js';
+	import { cn } from '#lib/utils.js';
 
-	let { onuploaded }: { onuploaded: (item: MediaItem) => void } = $props();
+	let {
+		onuploaded,
+		album,
+		hideTrigger = false
+	}: {
+		onuploaded: (item: MediaItem, albumId: string | null) => void;
+		/** Uploads go straight into this album as well as the library. */
+		album?: { id: string; name: string };
+		/** Hides the round button, e.g. while the gallery is selecting items. The dialog stays mounted. */
+		hideTrigger?: boolean;
+	} = $props();
 
 	// Where files can come from. The row of buttons is built from this, so a new source is one more entry.
 	let cameraOpen = $state(false);
@@ -26,7 +37,7 @@
 	function onpick(event: Event & { currentTarget: HTMLInputElement }) {
 		const files = [...(event.currentTarget.files ?? [])];
 		event.currentTarget.value = ''; // so choosing the same file again fires change
-		uploads.add(files);
+		uploads.add(files, album ?? null);
 	}
 
 	// Dropping files is a pointer-only shortcut, but the drop must be handled either way: otherwise the
@@ -37,7 +48,7 @@
 
 	function ondrop(event: DragEvent) {
 		event.preventDefault();
-		if (!uploads.uploading) uploads.add([...(event.dataTransfer?.files ?? [])]);
+		if (!uploads.uploading) uploads.add([...(event.dataTransfer?.files ?? [])], album ?? null);
 	}
 </script>
 
@@ -55,7 +66,10 @@
 			<Button
 				{...props}
 				size="icon-lg"
-				class="fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 size-14 rounded-full shadow-lg sm:right-6 sm:bottom-6 [&_svg]:size-6!"
+				class={cn(
+					'fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-10 size-14 rounded-full shadow-lg sm:right-6 sm:bottom-6 [&_svg]:size-6!',
+					hideTrigger && 'hidden'
+				)}
 			>
 				{#if uploads.uploading}
 					<Spinner />
@@ -63,7 +77,11 @@
 					<PlusIcon />
 				{/if}
 				<span class="sr-only"
-					>{uploads.uploading ? 'Uploading photos and videos' : 'Add photos and videos'}</span
+					>{uploads.uploading
+						? 'Uploading photos and videos'
+						: album
+							? `Add photos and videos to ${album.name}`
+							: 'Add photos and videos'}</span
 				>
 			</Button>
 		{/snippet}
@@ -81,10 +99,17 @@
 		class="max-sm:top-0 max-sm:left-0 max-sm:flex max-sm:h-svh max-sm:w-svw max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex-col max-sm:rounded-none max-sm:pt-[max(1rem,env(safe-area-inset-top))] max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] max-sm:ring-0 sm:max-w-lg"
 	>
 		<Dialog.Header>
-			<Dialog.Title>Add to gallery</Dialog.Title>
-			<Dialog.Description>
-				Choose photos and videos from your library, check the previews, then submit.
-			</Dialog.Description>
+			{#if album}
+				<Dialog.Title class="truncate" title={album.name}>Add to "{album.name}"</Dialog.Title>
+				<Dialog.Description>
+					New photos and videos go into this album and your library.
+				</Dialog.Description>
+			{:else}
+				<Dialog.Title>Add to gallery</Dialog.Title>
+				<Dialog.Description>
+					Choose photos and videos from your library, check the previews, then submit.
+				</Dialog.Description>
+			{/if}
 		</Dialog.Header>
 
 		<!-- On a wide screen the area is tall enough for two rows of previews (6 files) even when empty, so
@@ -154,7 +179,7 @@
 
 		{#if cameraOpen}
 			<CameraCapture
-				oncapture={(file) => uploads.add([file])}
+				oncapture={(file) => uploads.add([file], album ?? null)}
 				onclose={() => (cameraOpen = false)}
 			/>
 		{/if}

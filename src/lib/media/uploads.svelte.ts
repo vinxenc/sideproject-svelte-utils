@@ -19,6 +19,8 @@ export type Row = {
 	/** 0..1, of the original's upload */
 	progress: number;
 	error: string;
+	/** The album the file goes into, or null for the library alone. */
+	album: { id: string; name: string } | null;
 };
 
 export const inFlight = (row: Row) =>
@@ -52,10 +54,10 @@ class Uploads {
 	// Previews are made one after another, so picking dozens of big photos doesn't decode them all at once.
 	#previews: Promise<unknown> = Promise.resolve();
 	// Set while the gallery is on screen: where finished items go, and the only time there is a dialog to review in.
-	#onuploaded: ((item: MediaItem) => void) | undefined;
+	#onuploaded: ((item: MediaItem, albumId: string | null) => void) | undefined;
 
 	/** For the gallery to call while it is on screen. Leaving drops what is only a selection; uploads in flight carry on. */
-	attach(onuploaded: (item: MediaItem) => void) {
+	attach(onuploaded: (item: MediaItem, albumId: string | null) => void) {
 		this.#onuploaded = onuploaded;
 		return () => {
 			this.#onuploaded = undefined;
@@ -64,7 +66,7 @@ class Uploads {
 		};
 	}
 
-	add(files: File[]) {
+	add(files: File[], album: { id: string; name: string } | null = null) {
 		const rejected: { name: string; error: string }[] = [];
 		for (const file of files) {
 			const checked = checkMedia(file);
@@ -83,7 +85,8 @@ class Uploads {
 				duration: null,
 				stage: 'preview',
 				progress: 0,
-				error: ''
+				error: '',
+				album
 			});
 			// Through the array, so the row we mutate is the reactive one.
 			const row = this.rows[this.rows.length - 1];
@@ -113,17 +116,22 @@ class Uploads {
 		row.error = '';
 		let item: MediaItem | undefined;
 		try {
-			item = await uploadMedia(row.file, row.prepared, (stage, fraction) => {
-				row.stage = stage;
-				row.progress = fraction;
-			});
+			item = await uploadMedia(
+				row.file,
+				row.prepared,
+				(stage, fraction) => {
+					row.stage = stage;
+					row.progress = fraction;
+				},
+				row.album?.id ?? null
+			);
 		} catch (e) {
 			row.error = e instanceof Error ? e.message : 'Upload failed';
 		}
 		if (item) {
 			row.stage = 'done';
 			this.#added++;
-			this.#onuploaded?.(item);
+			this.#onuploaded?.(item, row.album?.id ?? null);
 		} else {
 			row.stage = 'error';
 		}
@@ -152,8 +160,16 @@ class Uploads {
 		const failed = this.rows.filter((r) => r.stage === 'error').length;
 		const added = this.#added;
 		if (failed === 0) {
+			// A round that went into one album says so; a mixed round says it went to the library.
+			// Read before close(), which drops the rows.
+			const album = this.rows[0]?.album ?? null;
+			const shared = album && this.rows.every((r) => r.album?.id === album.id) ? album : null;
 			this.close();
-			toast.success(`Added ${plural(added, 'item')} to the gallery`);
+			toast.success(
+				shared
+					? `Added ${plural(added, 'item')} to "${shared.name}"`
+					: `Added ${plural(added, 'item')} to the gallery`
+			);
 			return;
 		}
 		// With the dialog open, its cards already show what failed.
