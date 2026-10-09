@@ -21,7 +21,7 @@ export type AlbumSummary = {
 	createdAt: string;
 	/** ISO 8601; bumped by create, add items (when something was added) and remove items (when something was removed). */
 	updatedAt: string;
-	/** 0..3: cover first (when set), then the album's first items in display order. */
+	/** 0..3: cover first (when set), then the album's first-added items. */
 	previews: AlbumPreview[];
 };
 

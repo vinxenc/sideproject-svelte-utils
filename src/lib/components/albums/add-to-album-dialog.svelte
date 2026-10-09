@@ -89,6 +89,11 @@
 			busyId = null;
 			return;
 		}
+		// The album exists now: a retry must target it, not create another one.
+		creating = false;
+		newName = '';
+		list.reset();
+		void list.load();
 		await addTo(album);
 	}
 

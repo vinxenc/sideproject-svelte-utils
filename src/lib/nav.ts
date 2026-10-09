@@ -59,9 +59,9 @@ export type Crumb = { label: string; href?: string };
 
 /**
  * '/(app)/photo-video'              -> [{ label: 'Photo & video' }]
- * '/(app)/photo-video/albums'       -> [{ 'Photo & video', href: '/photo-video' }, { label: 'Album', href: ... }]   (see below)
+ * '/(app)/photo-video/albums'       -> [{ 'Photo & video', href: '/photo-video' }, { label: 'Album' }]
  * '/(app)/photo-video/albums/[id]'  -> [{ 'Photo & video', href: '/photo-video' }, { label: 'Album', href: '/photo-video/albums' }, { label: data.album?.name ?? 'Album' }]
- * anything else                     -> [{ label: sectionOf(url).name }]   (no "Settings >" crumb, see amendment Q1)
+ * anything else                     -> [{ label: sectionOf(url).name }]   (no "Settings >" crumb)
  */
 export function crumbsFor(
 	routeId: string | null,

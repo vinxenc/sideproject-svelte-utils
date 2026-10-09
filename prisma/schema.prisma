@@ -133,8 +133,8 @@ model Album {
   userId    String
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
-  // Falls back to the album's first item in display order (newest takenAt) when unset, or when the
-  // cover is deleted or removed from the album.
+  // Falls back to the album's first-added READY item when unset, or when the cover is deleted or
+  // removed from the album.
   coverId   String?
   cover     Media?       @relation("AlbumCover", fields: [coverId], references: [id], onDelete: SetNull)
   createdAt DateTime     @default(now())

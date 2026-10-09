@@ -185,6 +185,28 @@ describe('AddToAlbumDialog adding', () => {
 		expect(toast.success).toHaveBeenCalledWith('Added 2 items to "Summer"');
 	});
 
+	it('keeps the created album as a retry target when adding to it fails', async () => {
+		const created = albumSummary({ id: 'n1', name: 'Summer' });
+		let listed = 0;
+		fetchMock.mockImplementation(async (url, init) => {
+			if (init?.method === 'POST' && url === '/api/albums') return json(created, 201);
+			if (init?.method === 'POST') return json({ status: 500, message: 'Boom' }, 500);
+			listed += 1;
+			return json({ items: listed === 1 ? [] : [created], nextCursor: null });
+		});
+		render(AddToAlbumDialog, { props: { open: true, mediaIds: ['m1'], onadded: vi.fn() } });
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'New album' }));
+		const input = screen.getByLabelText('Name');
+		await fireEvent.input(input, { target: { value: 'Summer' } });
+		await fireEvent.submit(input.closest('form') as HTMLFormElement);
+
+		// A retry picks the existing album from the list instead of creating a second one.
+		expect(await screen.findByRole('button', { name: /Summer/ })).toBeTruthy();
+		expect(screen.queryByLabelText('Name')).toBeNull();
+		expect(toast.error).toHaveBeenCalled();
+	});
+
 	it('refuses a blank new album name without a request', async () => {
 		serve([]);
 		render(AddToAlbumDialog, { props: { open: true, mediaIds: ['m1'], onadded: vi.fn() } });
