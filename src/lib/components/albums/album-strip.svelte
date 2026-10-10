@@ -1,12 +1,11 @@
 <script lang="ts">
-	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import LayoutGridIcon from '@lucide/svelte/icons/layout-grid';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { goto } from '$app/navigation';
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { fetchAlbums } from '#lib/albums/api.js';
 	import type { AlbumSummary } from '#lib/albums/types.js';
+	import AlbumActionTile from '#lib/components/albums/album-action-tile.svelte';
 	import AlbumCard from '#lib/components/albums/album-card.svelte';
 	import CreateAlbumDialog from '#lib/components/albums/create-album-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -17,10 +16,7 @@
 	let albums = $state.raw<AlbumSummary[]>([]);
 	let status = $state<'loading' | 'ready' | 'error'>('loading');
 	let createOpen = $state(false);
-	let scroller: HTMLDivElement | undefined = $state();
-	let width = $state(0);
-	let canLeft = $state(false);
-	let canRight = $state(false);
+	let dragging = $state(false);
 	const STRIP_LIMIT = 5;
 
 	// Refetches when refreshKey changes. The load reads state before its first await, so it runs
@@ -42,55 +38,51 @@
 		}
 	}
 
-	function updateArrows() {
-		if (!scroller) return;
-		canLeft = scroller.scrollLeft > 0;
-		canRight = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+	// Mouse drag-to-scroll: hold an album and drag left or right. Touch and trackpads already scroll
+	// the strip natively, and the wheel keeps working.
+	const DRAG_THRESHOLD = 5;
+	let drag: { x: number; left: number; moved: boolean } | undefined;
+
+	function onpointerdown(event: PointerEvent & { currentTarget: HTMLDivElement }) {
+		if (event.pointerType !== 'mouse' || event.button !== 0) return;
+		drag = { x: event.clientX, left: event.currentTarget.scrollLeft, moved: false };
 	}
 
-	// The tiles change the scroll range, so the arrows are re-checked after they render, and on resize.
-	$effect(() => {
-		void albums;
-		void width;
-		void tick().then(updateArrows);
-	});
+	function onpointermove(event: PointerEvent & { currentTarget: HTMLDivElement }) {
+		if (!drag) return;
+		if (event.buttons !== 1) return endDrag();
+		const dx = event.clientX - drag.x;
+		if (!drag.moved) {
+			if (Math.abs(dx) < DRAG_THRESHOLD) return;
+			drag.moved = true;
+			dragging = true;
+			event.currentTarget.setPointerCapture(event.pointerId);
+		}
+		event.currentTarget.scrollLeft = drag.left - dx;
+	}
 
-	function scrollByPage(direction: -1 | 1) {
-		if (!scroller) return;
-		const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-		scroller.scrollBy({
-			left: direction * scroller.clientWidth * 0.8,
-			behavior: reduced ? 'auto' : 'smooth'
-		});
+	function endDrag() {
+		dragging = false;
+		// The click that ends a drag fires right after pointerup, so `drag` is cleared a task later.
+		setTimeout(() => (drag = undefined));
+	}
+
+	// A drag must not open the album it started on.
+	function onclickcapture(event: MouseEvent) {
+		if (!drag?.moved) return;
+		event.preventDefault();
+		event.stopPropagation();
 	}
 </script>
 
 <section aria-labelledby="albums-heading" class="flex flex-col gap-2">
 	<div class="flex items-center gap-1">
 		<h2 id="albums-heading" class="text-lg font-semibold">Albums</h2>
-		<CreateAlbumDialog
-			bind:open={createOpen}
-			oncreated={(a) => goto(`/photo-video/albums/${a.id}`)}
-		/>
-		<div class="ms-auto hidden gap-1 pointer-fine:flex">
-			<Button
-				variant="outline"
-				size="icon-sm"
-				aria-label="Scroll albums left"
-				disabled={!canLeft}
-				onclick={() => scrollByPage(-1)}
-			>
-				<ChevronLeftIcon />
-			</Button>
-			<Button
-				variant="outline"
-				size="icon-sm"
-				aria-label="Scroll albums right"
-				disabled={!canRight}
-				onclick={() => scrollByPage(1)}
-			>
-				<ChevronRightIcon />
-			</Button>
+		<div class="ms-auto">
+			<CreateAlbumDialog
+				bind:open={createOpen}
+				oncreated={(a) => goto(`/photo-video/albums/${a.id}`)}
+			/>
 		</div>
 	</div>
 
@@ -102,41 +94,47 @@
 	{:else}
 		<!-- The negative margin and padding leave room for the fanned frames' rotation and shadow, which
 		     the overflow would otherwise clip. -->
+		<!-- Dragging is a mouse-only extra: the albums stay focusable links and the strip scrolls
+		     natively with touch, wheel and keyboard. -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			bind:this={scroller}
-			bind:clientWidth={width}
-			onscroll={updateArrows}
-			class="-mx-4 -my-3 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 py-3 [&::-webkit-scrollbar]:hidden"
+			{onpointerdown}
+			{onpointermove}
+			onpointerup={endDrag}
+			onpointercancel={endDrag}
+			{onclickcapture}
+			ondragstart={(event) => event.preventDefault()}
+			style:scroll-snap-type={dragging ? 'none' : undefined}
+			class:select-none={dragging}
+			class="-mx-6 -my-3 flex snap-x snap-mandatory scroll-px-6 [scrollbar-width:none] gap-3 overflow-x-auto px-6 py-3 sm:gap-12 pointer-fine:cursor-grab [&::-webkit-scrollbar]:hidden"
 		>
 			{#if status === 'loading'}
 				{#each Array.from({ length: 5 }, (_, i) => i) as i (i)}
-					<div class="w-36 shrink-0 snap-start sm:w-44">
-						<Skeleton class="aspect-[4/3] w-full rounded-xl" />
+					<div class="w-36 shrink-0 snap-start sm:w-66">
+						<Skeleton class="aspect-[100/131] w-full rounded-xl" />
 						<Skeleton class="mt-2 h-4 w-3/4" />
 						<Skeleton class="mt-1 h-3 w-1/2" />
 					</div>
 				{/each}
 			{:else if albums.length === 0}
-				<button
-					type="button"
-					class="flex aspect-[4/3] w-36 shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-border text-sm font-medium sm:w-44"
+				<AlbumActionTile
+					label="New album"
+					class="w-36 shrink-0 snap-start sm:w-66"
 					onclick={() => (createOpen = true)}
 				>
-					<PlusIcon class="size-8 text-muted-foreground" />
-					New album
-				</button>
+					<PlusIcon />
+				</AlbumActionTile>
 			{:else}
 				{#each albums as album (album.id)}
-					<AlbumCard {album} class="w-36 shrink-0 snap-start sm:w-44" />
+					<AlbumCard {album} class="w-36 shrink-0 snap-start sm:w-66" />
 				{/each}
-				<a href="/photo-video/albums" class="block w-36 shrink-0 snap-start sm:w-44">
-					<span
-						class="flex aspect-[4/3] items-center justify-center rounded-xl border-2 border-dashed border-border"
-					>
-						<LayoutGridIcon class="size-8 text-muted-foreground" />
-					</span>
-					<span class="mt-2 block truncate text-sm font-medium">All albums</span>
-				</a>
+				<AlbumActionTile
+					label="All albums"
+					href="/photo-video/albums"
+					class="w-36 shrink-0 snap-start sm:w-66"
+				>
+					<LayoutGridIcon />
+				</AlbumActionTile>
 			{/if}
 		</div>
 	{/if}

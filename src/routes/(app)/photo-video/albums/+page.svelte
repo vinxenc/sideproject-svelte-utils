@@ -55,11 +55,15 @@
 <div class="flex flex-col gap-4">
 	<div class="flex items-center gap-1">
 		<h1 class="text-xl font-semibold">Albums</h1>
-		<CreateAlbumDialog oncreated={(a) => goto(`/photo-video/albums/${a.id}`)} />
+		<div class="ms-auto">
+			<CreateAlbumDialog oncreated={(a) => goto(`/photo-video/albums/${a.id}`)} />
+		</div>
 	</div>
 
 	{#if !list.loaded}
-		<div class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+		<div
+			class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-x-16 sm:gap-y-24 lg:grid-cols-4 xl:grid-cols-5"
+		>
 			{#each Array.from({ length: 10 }, (_, i) => i) as i (i)}
 				<div>
 					<Skeleton class="aspect-[4/3] w-full rounded-xl" />
@@ -84,7 +88,9 @@
 			oncreated={(a) => goto(`/photo-video/albums/${a.id}`)}
 		/>
 	{:else}
-		<div class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+		<div
+			class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-x-16 sm:gap-y-24 lg:grid-cols-4 xl:grid-cols-5"
+		>
 			{#each list.items as album (album.id)}
 				<AlbumCard {album} />
 			{/each}

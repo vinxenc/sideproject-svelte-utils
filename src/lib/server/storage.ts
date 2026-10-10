@@ -71,6 +71,14 @@ export async function head(key: string) {
 	};
 }
 
+/** An object's bytes as a stream (signed on the server, so the bucket stays private), or `null` if it doesn't exist. */
+export async function get(key: string) {
+	const res = await s3.fetch(objectUrl(key));
+	if (res.status === 404) return null;
+	if (!res.ok || !res.body) throw new Error(`S3 GET ${key} failed: ${res.status}`);
+	return res.body;
+}
+
 /** Deletes objects; keys that don't exist are ignored. */
 export async function remove(...keys: string[]) {
 	await Promise.all(

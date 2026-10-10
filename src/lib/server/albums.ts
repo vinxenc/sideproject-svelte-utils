@@ -127,6 +127,18 @@ export async function listAlbumMedia(userId: string, albumId: string, cursor: Cu
 	return listMedia({ userId, status: 'READY', albums: { some: { albumId } } }, cursor);
 }
 
+/** An album's name and all its READY items, oldest first, for a download; null when it isn't the user's. */
+export async function getAlbumDownload(userId: string, id: string) {
+	const album = await prisma.album.findFirst({ where: { id, userId }, select: { name: true } });
+	if (!album) return null;
+	const items = await prisma.media.findMany({
+		where: { userId, status: 'READY', albums: { some: { albumId: id } } },
+		orderBy: [{ takenAt: 'asc' }, { id: 'asc' }],
+		select: { id: true, userId: true, name: true, takenAt: true }
+	});
+	return { name: album.name, items };
+}
+
 /** null => 404 (album not owned, or any id not the user's READY media). Otherwise the number newly added. */
 export function addItems(
 	userId: string,

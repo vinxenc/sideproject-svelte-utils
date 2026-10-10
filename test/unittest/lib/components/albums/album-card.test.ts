@@ -37,13 +37,14 @@ describe('AlbumCard', () => {
 		expect(card(container).getAttribute('href')).toBe('/photo-video/albums/a1');
 	});
 
-	it('shows one dashed frame and never fans for an empty album', () => {
+	it('shows the dashed tile, linked to the album, and never fans for an empty album', () => {
 		const { container } = render(AlbumCard, {
-			props: { album: albumSummary({ previews: [], count: 0 }) }
+			props: { album: albumSummary({ id: 'a1', previews: [], count: 0 }) }
 		});
 
-		expect(frames(container)).toEqual(['front']);
-		expect(container.querySelector('.frame')?.classList).toContain('dashed');
+		expect(frames(container)).toEqual([]);
+		expect(card(container).getAttribute('href')).toBe('/photo-video/albums/a1');
+		expect(container.querySelector('.border-dashed')).toBeTruthy();
 		expect(
 			screen.getByText(
 				'No items · ' +

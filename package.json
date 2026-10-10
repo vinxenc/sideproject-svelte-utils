@@ -34,6 +34,7 @@
 		"@types/node": "^24",
 		"@vite-pwa/assets-generator": "^2.0.0",
 		"@vitest/coverage-v8": "^5.0.3",
+		"@zip.js/zip.js": "^2.23.0",
 		"aws4fetch": "^1.0.20",
 		"better-auth": "^1.7.7",
 		"bits-ui": "^2.18.0",

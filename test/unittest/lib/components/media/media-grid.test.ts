@@ -222,9 +222,131 @@ describe('MediaGrid selecting', () => {
 		expect(onopen).not.toHaveBeenCalled();
 	});
 
+	it('has a circle per tile that toggles it, visible on hover and always in select mode', async () => {
+		const ontoggle = vi.fn();
+		const items = [mediaItem({ id: 'a', name: 'a.jpg' }), mediaItem({ id: 'b', name: 'b.jpg' })];
+		const idle = setup({ items, ontoggle });
+
+		const circle = screen.getByRole('button', { name: 'Select a.jpg' });
+		expect(circle.className).toContain('opacity-0');
+		expect(circle.className).toContain('pointer-events-none');
+		expect(tiles(idle.container)).toHaveLength(2);
+		await fireEvent.click(circle);
+		expect(ontoggle).toHaveBeenCalledWith('a');
+		cleanup();
+
+		setup({ items, selecting: true, selected: new Set(['b']), ontoggle });
+		expect(screen.getByRole('button', { name: 'Select a.jpg' }).className).toContain('opacity-100');
+		expect(screen.getByRole('button', { name: 'Select b.jpg' }).getAttribute('aria-pressed')).toBe(
+			'true'
+		);
+		expect(screen.getByRole('button', { name: 'Select a.jpg' }).getAttribute('aria-pressed')).toBe(
+			'false'
+		);
+	});
+
 	it('marks no tile as pressed outside select mode', () => {
 		const { container } = setup({ items: [mediaItem({ id: 'a', name: 'a.jpg' })] });
 
 		expect(tiles(container)[0].hasAttribute('aria-pressed')).toBe(false);
+	});
+});
+
+describe('MediaGrid press and hold', () => {
+	const items = [mediaItem({ id: 'a', name: 'a.jpg' }), mediaItem({ id: 'b', name: 'b.jpg' })];
+
+	/** A pointer event with the fields jsdom's events don't carry on their own. */
+	function pointer(el: Element, type: string, { x = 0, y = 0, pointerType = 'touch' } = {}) {
+		const event = new Event(type, { bubbles: true, cancelable: true });
+		Object.assign(event, { clientX: x, clientY: y, pointerType });
+		el.dispatchEvent(event);
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('toggles the tile after half a second, and swallows the click that ends the hold', async () => {
+		const onopen = vi.fn();
+		const ontoggle = vi.fn();
+		const { container } = setup({ items, onopen, ontoggle });
+		const tile = tiles(container)[0];
+
+		pointer(tile, 'pointerdown');
+		vi.advanceTimersByTime(499);
+		expect(ontoggle).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(1);
+		expect(ontoggle).toHaveBeenCalledWith('a');
+
+		pointer(tile, 'pointerup');
+		await fireEvent.click(tile);
+		expect(onopen).not.toHaveBeenCalled();
+		expect(ontoggle).toHaveBeenCalledOnce();
+
+		await fireEvent.click(tile);
+		expect(onopen).toHaveBeenCalledWith('a');
+	});
+
+	it('is not a hold when the finger lifts early or moves (scrolling)', () => {
+		const ontoggle = vi.fn();
+		const { container } = setup({ items, ontoggle });
+		const tile = tiles(container)[0];
+
+		pointer(tile, 'pointerdown');
+		vi.advanceTimersByTime(300);
+		pointer(tile, 'pointerup');
+		vi.advanceTimersByTime(1000);
+
+		pointer(tile, 'pointerdown', { x: 10, y: 10 });
+		pointer(tile, 'pointermove', { x: 12, y: 11 });
+		vi.advanceTimersByTime(300);
+		pointer(tile, 'pointermove', { x: 10, y: 60 });
+		vi.advanceTimersByTime(1000);
+
+		pointer(tile, 'pointerdown');
+		pointer(tile, 'pointercancel');
+		vi.advanceTimersByTime(1000);
+
+		expect(ontoggle).not.toHaveBeenCalled();
+	});
+
+	it('ignores the mouse, which uses the circle in the corner', () => {
+		const ontoggle = vi.fn();
+		const { container } = setup({ items, ontoggle });
+
+		pointer(tiles(container)[0], 'pointerdown', { pointerType: 'mouse' });
+		vi.advanceTimersByTime(1000);
+
+		expect(ontoggle).not.toHaveBeenCalled();
+	});
+
+	it('keeps the context menu off after a touch, but not after a mouse press', () => {
+		const { container } = setup({ items });
+		const tile = tiles(container)[0];
+		const contextMenu = () => {
+			const event = new Event('contextmenu', { bubbles: true, cancelable: true });
+			tile.dispatchEvent(event);
+			return event.defaultPrevented;
+		};
+
+		pointer(tile, 'pointerdown', { pointerType: 'touch' });
+		expect(contextMenu()).toBe(true);
+		pointer(tile, 'pointerdown', { pointerType: 'mouse' });
+		expect(contextMenu()).toBe(false);
+	});
+
+	it('cancels a pending hold when the grid goes away', () => {
+		const ontoggle = vi.fn();
+		const { container, unmount } = setup({ items, ontoggle });
+
+		pointer(tiles(container)[0], 'pointerdown');
+		unmount();
+		vi.advanceTimersByTime(1000);
+
+		expect(ontoggle).not.toHaveBeenCalled();
 	});
 });

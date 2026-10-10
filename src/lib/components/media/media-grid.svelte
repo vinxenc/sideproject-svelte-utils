@@ -29,9 +29,10 @@
 		loading: boolean;
 		onopen: (id: string) => void;
 		onloadmore: () => void;
-		/** Select mode: a tap toggles the tile instead of opening it. */
+		/** Select mode: a tap toggles the tile instead of opening it, and every tile shows its circle. */
 		selecting?: boolean;
 		selected?: ReadonlySet<string>;
+		/** The circle in a tile's top-left corner (on hover, or always in select mode) or a press and hold. */
 		ontoggle?: (id: string) => void;
 	} = $props();
 
@@ -47,6 +48,54 @@
 	const layout = $derived(
 		masonry.layout(items, columnCount, width, gap, loading || items.length === 0)
 	);
+
+	// Touch and pen: press and hold a tile to start selecting. A mouse uses the circle in the corner.
+	const LONG_PRESS_MS = 500;
+	const MOVE_TOLERANCE = 10;
+	let press: { x: number; y: number; timer: ReturnType<typeof setTimeout> } | undefined;
+	let pressType = 'mouse';
+	// Set when a hold fired, so the click that ends it doesn't also open or toggle the tile.
+	let longPressed = false;
+
+	function cancelPress() {
+		if (!press) return;
+		clearTimeout(press.timer);
+		press = undefined;
+	}
+
+	function pressStart(event: PointerEvent, id: string) {
+		pressType = event.pointerType;
+		longPressed = false;
+		cancelPress();
+		if (event.pointerType === 'mouse') return;
+		press = {
+			x: event.clientX,
+			y: event.clientY,
+			timer: setTimeout(() => {
+				press = undefined;
+				longPressed = true;
+				ontoggle?.(id);
+			}, LONG_PRESS_MS)
+		};
+	}
+
+	// Scrolling the grid moves the finger (and the browser then cancels the pointer): not a hold.
+	function pressMove(event: PointerEvent) {
+		if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > MOVE_TOLERANCE) {
+			cancelPress();
+		}
+	}
+
+	function tileClick(id: string) {
+		if (longPressed) {
+			longPressed = false;
+			return;
+		}
+		if (selecting) ontoggle?.(id);
+		else onopen(id);
+	}
+
+	$effect(() => cancelPress);
 
 	// The sentinel sits below the grid. It is removed while a page loads and rendered again
 	// afterwards, so a sentinel that is still on screen once the page has arrived triggers the next.
@@ -77,49 +126,71 @@
 	<div class="relative" style:height="{layout.height}px">
 		{#each layout.tiles as tile (tile.item.id)}
 			{@const item = tile.item}
-			<button
-				type="button"
-				class="absolute block overflow-hidden rounded-xl bg-muted outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-				style:left="{tile.left}px"
-				style:top="{tile.top}px"
-				style:width="{layout.colWidth}px"
-				style:height="{tile.height}px"
-				title={item.name}
-				aria-pressed={selecting ? selected.has(item.id) : undefined}
-				class:ring-3={selecting && selected.has(item.id)}
-				class:ring-primary={selecting && selected.has(item.id)}
-				onclick={() => (selecting ? ontoggle?.(item.id) : onopen(item.id))}
-			>
-				{#if item.hasThumb}
-					<MediaImage
-						src="/api/media/{item.id}/thumb"
-						alt={item.name}
-						lazy
-						class="absolute inset-0"
-					>
-						{#snippet fallback()}
-							{@render placeholderIcon(item)}
-						{/snippet}
-					</MediaImage>
-				{:else}
-					{@render placeholderIcon(item)}
-				{/if}
-				{#if selecting}
-					<span class="absolute top-2 right-2 rounded-full bg-background/80">
-						{#if selected.has(item.id)}
-							<CircleCheckIcon class="text-primary" />
-						{:else}
-							<CircleIcon class="text-muted-foreground" />
-						{/if}
-					</span>
-				{/if}
-				{#if item.kind === 'VIDEO'}
-					<Badge variant="secondary" class="absolute bottom-2 left-2">
-						<PlayIcon data-icon="inline-start" />
-						{#if item.duration !== null}{formatDuration(item.duration)}{/if}
-					</Badge>
-				{/if}
-			</button>
+			<!-- Box-less, so the tile and its circle stay positioned against the grid; it is the hover group. -->
+			<div class="group/tile contents">
+				<button
+					type="button"
+					class="absolute block overflow-hidden rounded-xl bg-muted outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-3 focus-visible:ring-ring/50"
+					style:left="{tile.left}px"
+					style:top="{tile.top}px"
+					style:width="{layout.colWidth}px"
+					style:height="{tile.height}px"
+					title={item.name}
+					aria-pressed={selecting ? selected.has(item.id) : undefined}
+					class:ring-3={selecting && selected.has(item.id)}
+					class:ring-primary={selecting && selected.has(item.id)}
+					onclick={() => tileClick(item.id)}
+					onpointerdown={(event) => pressStart(event, item.id)}
+					onpointermove={pressMove}
+					onpointerup={cancelPress}
+					onpointercancel={cancelPress}
+					oncontextmenu={(event) => pressType !== 'mouse' && event.preventDefault()}
+				>
+					{#if item.hasThumb}
+						<MediaImage
+							src="/api/media/{item.id}/thumb"
+							alt={item.name}
+							lazy
+							class="absolute inset-0"
+						>
+							{#snippet fallback()}
+								{@render placeholderIcon(item)}
+							{/snippet}
+						</MediaImage>
+					{:else}
+						{@render placeholderIcon(item)}
+					{/if}
+					{#if item.kind === 'VIDEO'}
+						<Badge variant="secondary" class="absolute bottom-2 left-2">
+							<PlayIcon data-icon="inline-start" />
+							{#if item.duration !== null}{formatDuration(item.duration)}{/if}
+						</Badge>
+					{/if}
+				</button>
+				<!-- A sibling of the tile (a button can't hold a button), placed over its top-left corner and
+			     revealed with it: on hover, on keyboard focus, and always while selecting. Touch has no
+			     hover, so it stays out of the way (and out of reach of taps) until something is selected. -->
+				<button
+					type="button"
+					class={cn(
+						'absolute flex size-7 items-center justify-center rounded-full transition duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none',
+						selecting
+							? 'scale-100 opacity-100'
+							: 'pointer-events-none scale-75 opacity-0 group-hover/tile:pointer-events-auto group-hover/tile:scale-100 group-hover/tile:opacity-100 group-has-[:focus-visible]/tile:scale-100 group-has-[:focus-visible]/tile:opacity-100'
+					)}
+					style:left="{tile.left + 8}px"
+					style:top="{tile.top + 8}px"
+					aria-label="Select {item.name}"
+					aria-pressed={selected.has(item.id)}
+					onclick={() => ontoggle?.(item.id)}
+				>
+					{#if selected.has(item.id)}
+						<CircleCheckIcon class="text-white drop-shadow-md" />
+					{:else}
+						<CircleIcon class="text-white drop-shadow-md" />
+					{/if}
+				</button>
+			</div>
 		{/each}
 
 		<!-- Pulsing while a page is on its way, standing still when there is nothing to show (an empty

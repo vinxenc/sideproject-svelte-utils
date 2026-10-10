@@ -317,20 +317,45 @@ describe('Gallery in an album', () => {
 describe('Gallery select mode', () => {
 	const trip = albumSummary({ id: 'a1', name: 'Trip' });
 
-	it('shows the selection bar with the count, and hides the round add button', async () => {
+	it('selects from a tile circle, shows the bar with the count, and hides the round add button', async () => {
 		servePages({ '': { items: [a, b], nextCursor: null } });
 		await renderGallery();
+		expect(screen.queryByText('1 selected')).toBeNull();
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-		expect(screen.getByText('0 selected')).toBeTruthy();
-		expect(
-			(screen.getByRole('button', { name: 'Add to album' }) as HTMLButtonElement).disabled
-		).toBe(true);
-		await fireEvent.click(screen.getByTitle('a.jpg'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Select a.jpg' }));
 
 		expect(screen.getByText('1 selected')).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Add to album' })).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Add photos and videos' }).className).toContain(
+			'hidden'
+		);
+	});
+
+	it('toggles tiles instead of opening them while something is selected, and leaves when empty', async () => {
+		servePages({ '': { items: [a, b], nextCursor: null } });
+		await renderGallery();
+		await fireEvent.click(screen.getByRole('button', { name: 'Select a.jpg' }));
+
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+		expect(screen.getByText('2 selected')).toBeTruthy();
+		expect(screen.queryByRole('dialog')).toBeNull();
+
+		await fireEvent.click(screen.getByTitle('a.jpg'));
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+		expect(screen.queryByText(/ selected$/)).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Add to album' })).toBeNull();
+	});
+
+	it('clears the selection from the bar', async () => {
+		servePages({ '': { items: [a, b], nextCursor: null } });
+		await renderGallery();
+		await fireEvent.click(screen.getByRole('button', { name: 'Select a.jpg' }));
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+
+		expect(screen.queryByText(/ selected$/)).toBeNull();
+		expect(screen.getByRole('button', { name: 'Add photos and videos' }).className).not.toContain(
 			'hidden'
 		);
 	});
@@ -344,8 +369,7 @@ describe('Gallery select mode', () => {
 		const onalbumschanged = vi.fn();
 		render(Gallery, { props: { onalbumschanged } });
 		await screen.findByTitle('b.jpg');
-		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-		await fireEvent.click(screen.getByTitle('a.jpg'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Select a.jpg' }));
 		await fireEvent.click(screen.getByTitle('b.jpg'));
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Add to album' }));
@@ -353,7 +377,7 @@ describe('Gallery select mode', () => {
 
 		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Added 2 items to "Trip"'));
 		expect(onalbumschanged).toHaveBeenCalled();
-		expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy();
+		expect(screen.queryByText(/ selected$/)).toBeNull();
 	});
 
 	it('removes the selection from the album, keeping the photos and toasting the count', async () => {
@@ -363,8 +387,7 @@ describe('Gallery select mode', () => {
 		const onalbumschanged = vi.fn();
 		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' }, onalbumschanged } });
 		await screen.findByTitle('b.jpg');
-		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-		await fireEvent.click(screen.getByTitle('a.jpg'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Select a.jpg' }));
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
@@ -381,8 +404,7 @@ describe('Gallery select mode', () => {
 		);
 		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
 		await screen.findByTitle('a.jpg');
-		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-		await fireEvent.click(screen.getByTitle('a.jpg'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Select a.jpg' }));
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
@@ -401,8 +423,7 @@ describe('Gallery select mode', () => {
 		);
 		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
 		await screen.findByTitle('a.jpg');
-		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-		await fireEvent.click(screen.getByTitle('a.jpg'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Select a.jpg' }));
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
@@ -425,8 +446,7 @@ describe('Gallery select mode', () => {
 		await fireEvent.click(screen.getByTitle('b.jpg'));
 		expect(await screen.findByRole('heading', { name: 'b.jpg' })).toBeTruthy();
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-		await fireEvent.click(screen.getByTitle('b.jpg'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Select b.jpg' }));
 		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
 		expect(await screen.findByRole('heading', { name: 'c.jpg' })).toBeTruthy();

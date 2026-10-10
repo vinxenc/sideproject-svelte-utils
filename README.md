@@ -86,7 +86,7 @@ Requirements: Node 22.17+, pnpm 9+ and Docker (for the local Postgres).
 
 ```sh
 pnpm install                  # also generates the Prisma client
-cp .env.example .env          # then set BETTER_AUTH_SECRET, see "Local .env" below
+cp .env.example .env          # ready to use as is, see "Local .env" below
 docker compose up -d --wait   # Postgres on :5432, RustFS (S3) on :9000, console on :9001
 pnpm db:migrate               # apply migrations
 pnpm dev                      # dev server at http://localhost:5173
@@ -96,15 +96,15 @@ pnpm dev                      # dev server at http://localhost:5173
 
 ### Local .env
 
-Never commit `.env*` files other than `.env.example`, and keep real secrets out of `.env.example`: this repository is public.
+Never commit `.env*` files other than `.env.example`. `.env.example` deliberately holds the shared **local-dev** `BETTER_AUTH_SECRET` (this repository is public, so never use that value outside local development, and never put any other real secret in it).
 
 Every checkout and git worktree (including agent worktrees under `.claude/worktrees/`) shares the same Docker Postgres. Better Auth encrypts its signing key in that database's `jwks` table with `BETTER_AUTH_SECRET`, so **all of them must use the same secret**; a different one makes sign-in and sign-up fail with `Failed to decrypt private key`.
 
-To set up `.env` in a new checkout or worktree:
+To set up `.env` in a new checkout or worktree, always do exactly this (in every session):
 
-1. `cp .env.example .env`. The other values already match `docker-compose.yml`.
-2. Copy the `BETTER_AUTH_SECRET` line from an existing checkout's `.env` (the main checkout or another worktree).
-3. Only if no checkout has one yet (a fresh database), generate it with `openssl rand -base64 32`. To change it later, delete the rows in the `jwks` table so Better Auth creates a new key; this signs everyone out.
+1. `cp .env.example .env`. Every value, including `BETTER_AUTH_SECRET`, already matches `docker-compose.yml` and the shared database. Don't copy the secret from another checkout's `.env` and don't generate a new one: a stale or hand-edited `.env` is what causes the `Failed to decrypt private key` 500.
+2. If an existing `.env` returns that 500, re-copy `BETTER_AUTH_SECRET` from `.env.example`.
+3. To rotate it (fresh or wiped database only): set a new value in `.env.example` (`openssl rand -base64 32`), delete the rows in the `jwks` table so Better Auth creates a new key, and update every checkout's `.env`; this signs everyone out.
 
 Auth endpoints live under `/api/auth/*` (e.g. `POST /api/auth/sign-up/email`). API docs: `/api/auth/reference` (Scalar UI), raw OpenAPI JSON: `/api/auth/open-api/generate-schema`, public signing keys: `/api/auth/jwks`.
 
@@ -179,7 +179,7 @@ CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install 
 
 ### Production checklist
 
-- **Secrets & URLs:** set a strong `BETTER_AUTH_SECRET` (`openssl rand -base64 32`) in the host's secret store, and set `baseURL` in `auth.ts` (or a `BETTER_AUTH_URL` env var) to the public origin so callbacks and the JWT issuer don't depend on the request's `Host` header.
+- **Secrets & URLs:** set a strong `BETTER_AUTH_SECRET` (`openssl rand -base64 32`; never the local-dev value from `.env.example`) in the host's secret store, and set `baseURL` in `auth.ts` (or a `BETTER_AUTH_URL` env var) to the public origin so callbacks and the JWT issuer don't depend on the request's `Host` header.
 - **Database:** a hosted Postgres, with `DATABASE_URL` in the host's secret store (and `?sslmode=require` if the provider needs TLS). Apply migrations with `prisma migrate deploy` as a CI step before each release; `prisma.config.ts` picks up `DATABASE_URL` from the environment.
 - **HTTPS only:** required for `__Secure-` cookies, and a leaked token is usable immediately.
 - **Key rotation:** set `jwt({ jwks: { rotationInterval, gracePeriod } })`. `src/lib/server/session.ts` caches the JWKS until restart, so make it refetch when it sees an unknown `kid` (or use `jose`'s `createRemoteJWKSet`, which does this) before turning rotation on.
