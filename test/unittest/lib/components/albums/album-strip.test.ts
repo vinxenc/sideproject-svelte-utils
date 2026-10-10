@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AlbumStrip from '#lib/components/albums/album-strip.svelte';
 import { albumSummary } from '../../../helpers/albums.js';
@@ -35,10 +36,28 @@ function layout(el: HTMLElement, { scrollLeft = 0, clientWidth = 200, scrollWidt
 	Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scrollWidth });
 }
 
+/** A pointer event with the fields jsdom's events don't carry on their own. */
+function pointer(
+	el: Element,
+	type: string,
+	{ x = 0, pointerType = 'mouse', button = 0, buttons = 1 } = {}
+) {
+	const event = new Event(type, { bubbles: true, cancelable: true });
+	Object.assign(event, { clientX: x, pointerType, button, buttons, pointerId: 1 });
+	el.dispatchEvent(event);
+}
+
+/** A click, returning whether its default (following the link) was prevented. */
+function click(el: Element) {
+	const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+	el.dispatchEvent(event);
+	return event.defaultPrevented;
+}
+
 beforeEach(() => {
 	fetchMock.mockReset();
 	vi.stubGlobal('fetch', fetchMock);
-	HTMLElement.prototype.scrollBy = vi.fn();
+	HTMLElement.prototype.setPointerCapture = vi.fn();
 });
 
 afterEach(() => {
@@ -129,60 +148,82 @@ describe('AlbumStrip loading', () => {
 	});
 });
 
-describe('AlbumStrip arrows', () => {
-	it('disables both arrows when everything fits', async () => {
+describe('AlbumStrip dragging', () => {
+	it('has no scroll buttons', async () => {
 		serveAlbums('Trip');
 		render(AlbumStrip);
 		await screen.findByText('Trip');
-		layout(scroller(), { clientWidth: 600, scrollWidth: 600 });
-		await fireEvent.scroll(scroller());
 
-		expect(
-			(screen.getByRole('button', { name: 'Scroll albums left' }) as HTMLButtonElement).disabled
-		).toBe(true);
-		expect(
-			(screen.getByRole('button', { name: 'Scroll albums right' }) as HTMLButtonElement).disabled
-		).toBe(true);
+		expect(screen.queryByRole('button', { name: 'Scroll albums left' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Scroll albums right' })).toBeNull();
 	});
 
-	it('scrolls a page at a time, and turns the arrows off at the ends', async () => {
+	it('scrolls with the mouse held down, and lets the snap back in on release', async () => {
 		serveAlbums('Trip');
 		render(AlbumStrip);
 		await screen.findByText('Trip');
-		layout(scroller(), { scrollLeft: 0, clientWidth: 200, scrollWidth: 600 });
-		await fireEvent.scroll(scroller());
-		const left = screen.getByRole('button', { name: 'Scroll albums left' }) as HTMLButtonElement;
-		const right = screen.getByRole('button', { name: 'Scroll albums right' }) as HTMLButtonElement;
-		expect(left.disabled).toBe(true);
-		expect(right.disabled).toBe(false);
+		layout(scroller(), { scrollLeft: 100 });
 
-		await fireEvent.click(right);
-		expect(scroller().scrollBy).toHaveBeenCalledWith({ left: 160, behavior: 'smooth' });
+		pointer(scroller(), 'pointerdown', { x: 200 });
+		pointer(scroller(), 'pointermove', { x: 150 });
+		await tick();
+		expect(scroller().scrollLeft).toBe(150);
+		expect(scroller().style.scrollSnapType).toBe('none');
+		expect(HTMLElement.prototype.setPointerCapture).toHaveBeenCalledOnce();
 
-		layout(scroller(), { scrollLeft: 400, clientWidth: 200, scrollWidth: 600 });
-		await fireEvent.scroll(scroller());
-		expect(left.disabled).toBe(false);
-		expect(right.disabled).toBe(true);
-		await fireEvent.click(left);
-		expect(scroller().scrollBy).toHaveBeenLastCalledWith({ left: -160, behavior: 'smooth' });
+		pointer(scroller(), 'pointermove', { x: 260 });
+		expect(scroller().scrollLeft).toBe(40);
+
+		pointer(scroller(), 'pointerup', { x: 260 });
+		await tick();
+		expect(scroller().style.scrollSnapType).toBe('');
 	});
 
-	it('scrolls without animation when the user prefers reduced motion', async () => {
+	it('does not scroll for touch or a non-primary button', async () => {
 		serveAlbums('Trip');
 		render(AlbumStrip);
 		await screen.findByText('Trip');
-		layout(scroller(), { clientWidth: 200, scrollWidth: 600 });
-		await fireEvent.scroll(scroller());
-		window.matchMedia = ((query: string) => ({
-			matches: query.includes('reduced-motion'),
-			media: query,
-			addEventListener: () => {},
-			removeEventListener: () => {}
-		})) as unknown as typeof window.matchMedia;
+		layout(scroller(), { scrollLeft: 100 });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Scroll albums right' }));
+		pointer(scroller(), 'pointerdown', { x: 200, pointerType: 'touch' });
+		pointer(scroller(), 'pointermove', { x: 100, pointerType: 'touch' });
+		pointer(scroller(), 'pointerdown', { x: 200, button: 2 });
+		pointer(scroller(), 'pointermove', { x: 100 });
 
-		expect(scroller().scrollBy).toHaveBeenCalledWith({ left: 160, behavior: 'auto' });
+		expect(scroller().scrollLeft).toBe(100);
+	});
+
+	it('ignores a movement under the threshold, so a click still opens the album', async () => {
+		serveAlbums('Trip');
+		render(AlbumStrip);
+		const link = (await screen.findByText('Trip')).closest('a') as HTMLAnchorElement;
+		layout(scroller(), { scrollLeft: 100 });
+
+		pointer(scroller(), 'pointerdown', { x: 200 });
+		pointer(scroller(), 'pointermove', { x: 197 });
+		pointer(scroller(), 'pointerup', { x: 197 });
+
+		expect(scroller().scrollLeft).toBe(100);
+		expect(click(link)).toBe(false);
+	});
+
+	it('swallows the click that ends a drag, and stops dragging when the button is up', async () => {
+		serveAlbums('Trip');
+		render(AlbumStrip);
+		const link = (await screen.findByText('Trip')).closest('a') as HTMLAnchorElement;
+		layout(scroller(), { scrollLeft: 100 });
+
+		pointer(scroller(), 'pointerdown', { x: 200 });
+		pointer(scroller(), 'pointermove', { x: 100 });
+		pointer(scroller(), 'pointerup', { x: 100 });
+		expect(click(link)).toBe(true);
+
+		await new Promise((resolve) => setTimeout(resolve));
+		expect(click(link)).toBe(false);
+
+		pointer(scroller(), 'pointerdown', { x: 200 });
+		pointer(scroller(), 'pointermove', { x: 150, buttons: 0 });
+		expect(scroller().scrollLeft).toBe(200);
 	});
 });
 

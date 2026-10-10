@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { head, presignGet, presignPut, remove } from '#lib/server/storage.js';
+import { get, head, presignGet, presignPut, remove } from '#lib/server/storage.js';
 
 const fetchMock = vi.fn<(req: Request) => Promise<Response>>();
 
@@ -83,6 +83,35 @@ describe('head', () => {
 		fetchMock.mockResolvedValue(new Response(null, { status: 403 }));
 
 		await expect(head('k')).rejects.toThrow('S3 HEAD k failed: 403');
+	});
+});
+
+describe('get', () => {
+	it('returns the object as a stream, using a signed GET', async () => {
+		fetchMock.mockResolvedValue(new Response('bytes'));
+
+		const stream = await get('u1/m1/original');
+
+		expect(await new Response(stream).text()).toBe('bytes');
+		expect(lastRequest().method).toBe('GET');
+		expect(new URL(lastRequest().url).pathname).toBe('/media/u1/m1/original');
+		expect(lastRequest().headers.get('authorization')).toContain('AWS4-HMAC-SHA256');
+	});
+
+	it('returns null for an object that does not exist', async () => {
+		fetchMock.mockResolvedValue(new Response(null, { status: 404 }));
+
+		expect(await get('k')).toBeNull();
+	});
+
+	it('throws on any other failure', async () => {
+		fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
+
+		await expect(get('k')).rejects.toThrow('S3 GET k failed: 500');
+	});
+
+	it('refuses a key that would leave the bucket', async () => {
+		await expect(get('u1/../u2/x')).rejects.toThrow('Invalid object key: u1/../u2/x');
 	});
 });
 

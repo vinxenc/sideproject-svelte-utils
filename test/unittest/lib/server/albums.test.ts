@@ -4,6 +4,7 @@ import {
 	addItems,
 	createAlbum,
 	deleteAlbum,
+	getAlbumDownload,
 	getAlbumSummary,
 	listAlbumMedia,
 	listAlbums,
@@ -367,5 +368,33 @@ describe('removeItems', () => {
 
 		expect(await removeItems('u1', 'a1', ['m1'])).toBe(0);
 		expect(db.album.update).not.toHaveBeenCalled();
+	});
+});
+
+describe('getAlbumDownload', () => {
+	it("is null when the album is not the owner's", async () => {
+		db.album.findFirst.mockResolvedValue(null);
+
+		expect(await getAlbumDownload('u1', 'a1')).toBeNull();
+		expect(db.media.findMany).not.toHaveBeenCalled();
+	});
+
+	it("returns the album's name and its READY items, oldest first", async () => {
+		db.album.findFirst.mockResolvedValue({ name: 'Trip' });
+		db.media.findMany.mockResolvedValue([
+			{ id: 'm1', userId: 'u1', name: 'a.jpg', takenAt: UPDATED }
+		]);
+
+		const result = await getAlbumDownload('u1', 'a1');
+
+		expect(result).toEqual({
+			name: 'Trip',
+			items: [{ id: 'm1', userId: 'u1', name: 'a.jpg', takenAt: UPDATED }]
+		});
+		expect(db.media.findMany).toHaveBeenCalledWith({
+			where: { userId: 'u1', status: 'READY', albums: { some: { albumId: 'a1' } } },
+			orderBy: [{ takenAt: 'asc' }, { id: 'asc' }],
+			select: { id: true, userId: true, name: true, takenAt: true }
+		});
 	});
 });

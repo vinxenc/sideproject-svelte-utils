@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { uploads } from '#lib/media/uploads.svelte.js';
 import Page from '../../../../../../../src/routes/(app)/photo-video/albums/[id]/+page.svelte';
 
 const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
@@ -32,15 +33,55 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
-/** Opens the ⋯ menu and chooses Delete album, the way a mouse user does. */
-async function chooseDelete() {
+/** Opens the ⋯ menu and chooses an item, the way a mouse user does. */
+async function chooseFromMenu(name: string) {
 	const trigger = screen.getByRole('button', { name: 'Album options' });
 	await fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-	const item = await screen.findByRole('menuitem', { name: 'Delete album' });
+	const item = await screen.findByRole('menuitem', { name });
 	await fireEvent.click(item);
 }
 
+const chooseDelete = () => chooseFromMenu('Delete');
+
 describe('Album page', () => {
+	it('lists New file and Download above Delete in the menu', async () => {
+		render(Page, { props: { data } });
+		const trigger = screen.getByRole('button', { name: 'Album options' });
+		await fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+
+		const items = (await screen.findAllByRole('menuitem')).map((el) => el.textContent?.trim());
+
+		expect(items).toEqual(['New file', 'Download', 'Delete']);
+		expect(screen.getByText('File')).toBeTruthy();
+	});
+
+	it('downloads the album as a ZIP from Download', async () => {
+		const links: HTMLAnchorElement[] = [];
+		const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+			this: HTMLAnchorElement
+		) {
+			links.push(this);
+		});
+		render(Page, { props: { data } });
+
+		await chooseFromMenu('Download');
+
+		expect(links).toHaveLength(1);
+		expect(links[0].getAttribute('href')).toBe('/api/albums/a1/download');
+		expect(links[0].hasAttribute('download')).toBe(true);
+		click.mockRestore();
+	});
+
+	it('opens the upload dialog from New file', async () => {
+		render(Page, { props: { data } });
+		expect(uploads.open).toBe(false);
+
+		await chooseFromMenu('New file');
+
+		expect(uploads.open).toBe(true);
+		uploads.close();
+	});
+
 	it('shows the album name as the title and loads its media', async () => {
 		render(Page, { props: { data } });
 
