@@ -6,8 +6,8 @@ configure({ useWebWorkers: false });
 export type ZipEntry = {
 	name: string;
 	modified: Date;
-	/** The file's bytes, or `null` when it is missing (the entry is then left out). */
-	open: () => Promise<ReadableStream<Uint8Array> | null>;
+	/** The file's bytes. Reject when they can't be read: the archive then fails instead of being incomplete. */
+	open: () => Promise<ReadableStream<Uint8Array>>;
 };
 
 /**
@@ -24,7 +24,6 @@ export function zipStream(entries: ZipEntry[]): ReadableStream<Uint8Array> {
 	void (async () => {
 		for (const entry of entries) {
 			const body = await entry.open();
-			if (!body) continue;
 			await zip.zipWriter.add(entry.name, body, { lastModDate: entry.modified });
 		}
 		await zip.close();
@@ -71,8 +70,13 @@ export function uniqueNames(names: string[]) {
 	});
 }
 
-/** `attachment` with an ASCII fallback name and the real one as RFC 5987 UTF-8. */
+/** `attachment` with an ASCII fallback name and the real one as RFC 8187 UTF-8. */
 export function attachment(filename: string) {
 	const ascii = filename.replace(/[^\x20-\x7e]|["%\\]/g, '_');
-	return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+	// encodeURIComponent leaves ' ( ) * alone, which RFC 8187's attr-char doesn't allow.
+	const encoded = encodeURIComponent(filename).replace(
+		/['()*]/g,
+		(ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`
+	);
+	return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }

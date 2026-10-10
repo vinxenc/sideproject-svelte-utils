@@ -64,6 +64,16 @@ describe('GET /api/albums/:id/download', () => {
 		});
 	});
 
+	it('fails the download when an original is missing from storage, instead of leaving it out', async () => {
+		storage.get.mockImplementation(async (key: string) =>
+			key === 'u1/m2/original' ? null : new Response('bytes').body
+		);
+
+		const res = await GET(event());
+
+		await expect(res.arrayBuffer()).rejects.toThrow('The original of m2 is missing from storage');
+	});
+
 	it('streams the originals as a ZIP named after the album, with repeated names numbered', async () => {
 		const res = await GET(event());
 

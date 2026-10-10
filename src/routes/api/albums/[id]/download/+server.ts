@@ -17,7 +17,12 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 		album.items.map((item, i) => ({
 			name: names[i],
 			modified: item.takenAt,
-			open: () => get(originalKey(item))
+			// A missing original fails the download rather than leaving a file out of the archive.
+			open: async () => {
+				const body = await get(originalKey(item));
+				if (!body) throw new Error(`The original of ${item.id} is missing from storage`);
+				return body;
+			}
 		}))
 	);
 	return new Response(body, {

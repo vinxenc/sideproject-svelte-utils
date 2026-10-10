@@ -66,7 +66,7 @@
 		>
 			{#each Array.from({ length: 10 }, (_, i) => i) as i (i)}
 				<div>
-					<Skeleton class="aspect-[4/3] w-full rounded-xl" />
+					<Skeleton class="aspect-[100/131] w-full rounded-xl" />
 					<Skeleton class="mt-2 h-4 w-3/4" />
 				</div>
 			{/each}

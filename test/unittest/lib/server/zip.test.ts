@@ -4,10 +4,10 @@ import { attachment, safeFileName, uniqueNames, zipStream } from '#lib/server/zi
 import type { ZipEntry } from '#lib/server/zip.js';
 
 const body = (text: string) => new Response(text).body as ReadableStream<Uint8Array>;
-const entry = (name: string, text: string | null): ZipEntry => ({
+const entry = (name: string, text: string): ZipEntry => ({
 	name,
 	modified: new Date('2024-05-01T10:00:00.000Z'),
-	open: async () => (text === null ? null : body(text))
+	open: async () => body(text)
 });
 
 /** The archive's entries, read back with a real ZIP reader. */
@@ -29,12 +29,6 @@ describe('zipStream', () => {
 		const files = await unzip(zipStream([entry('a.jpg', 'first'), entry('b.mp4', 'second')]));
 
 		expect(files).toEqual({ 'a.jpg': 'first', 'b.mp4': 'second' });
-	});
-
-	it('leaves out an entry that is missing and keeps the rest', async () => {
-		const files = await unzip(zipStream([entry('a.jpg', 'first'), entry('gone.jpg', null)]));
-
-		expect(files).toEqual({ 'a.jpg': 'first' });
 	});
 
 	it('errors the stream when a file cannot be read, instead of ending a truncated archive', async () => {
@@ -111,5 +105,14 @@ describe('attachment', () => {
 		expect(attachment('Trip "Đà Lạt".zip')).toBe(
 			`attachment; filename="Trip ___ L_t_.zip"; filename*=UTF-8''${encodeURIComponent('Trip "Đà Lạt".zip')}`
 		);
+	});
+
+	it("escapes ' ( ) * in the UTF-8 name, which encodeURIComponent leaves alone", () => {
+		const header = attachment("Mom's (2024) *best* Đà Lạt.zip");
+
+		expect(header).toBe(
+			`attachment; filename="Mom's (2024) *best* __ L_t.zip"; filename*=UTF-8''Mom%27s%20%282024%29%20%2Abest%2A%20%C4%90%C3%A0%20L%E1%BA%A1t.zip`
+		);
+		expect(header.split("filename*=UTF-8''")[1]).toMatch(/^[A-Za-z0-9%._-]+$/);
 	});
 });
