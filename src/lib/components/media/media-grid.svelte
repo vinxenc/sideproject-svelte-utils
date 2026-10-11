@@ -1,5 +1,5 @@
 <script lang="ts">
-	import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+	import CheckIcon from '@lucide/svelte/icons/check';
 	import CircleIcon from '@lucide/svelte/icons/circle';
 	import ImageIcon from '@lucide/svelte/icons/image';
 	import PlayIcon from '@lucide/svelte/icons/play';
@@ -137,8 +137,6 @@
 					style:height="{tile.height}px"
 					title={item.name}
 					aria-pressed={selecting ? selected.has(item.id) : undefined}
-					class:ring-3={selecting && selected.has(item.id)}
-					class:ring-primary={selecting && selected.has(item.id)}
 					onclick={() => tileClick(item.id)}
 					onpointerdown={(event) => pressStart(event, item.id)}
 					onpointermove={pressMove}
@@ -174,6 +172,7 @@
 					type="button"
 					class={cn(
 						'absolute flex size-7 items-center justify-center rounded-full transition duration-150 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none',
+						selected.has(item.id) && 'bg-white shadow-md',
 						selecting
 							? 'scale-100 opacity-100'
 							: 'pointer-events-none scale-75 opacity-0 group-hover/tile:pointer-events-auto group-hover/tile:scale-100 group-hover/tile:opacity-100 group-has-[:focus-visible]/tile:scale-100 group-has-[:focus-visible]/tile:opacity-100'
@@ -185,7 +184,7 @@
 					onclick={() => ontoggle?.(item.id)}
 				>
 					{#if selected.has(item.id)}
-						<CircleCheckIcon class="text-white drop-shadow-md" />
+						<CheckIcon class="size-4 text-black" strokeWidth={3} />
 					{:else}
 						<CircleIcon class="text-white drop-shadow-md" />
 					{/if}

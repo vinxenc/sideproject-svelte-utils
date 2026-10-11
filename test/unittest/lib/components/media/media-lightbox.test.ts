@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/sv
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import MediaLightbox from '#lib/components/media/media-lightbox.svelte';
 import type { MediaItem } from '#lib/media/types.js';
-import { mediaItem } from '../../../helpers/media.js';
+import { deferred, mediaItem } from '../../../helpers/media.js';
 
 afterEach(cleanup);
 
@@ -251,6 +251,8 @@ describe('MediaLightbox edge cases', () => {
 
 		expect(screen.getByRole('dialog')).toBeTruthy();
 		expect(screen.queryByRole('heading')).toBeNull();
+		// Still a way out.
+		expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
 	});
 });
 
@@ -329,17 +331,119 @@ describe('MediaLightbox arrow keys owned by other controls', () => {
 		menu.remove();
 	});
 
-	it('leaves the arrows to a dialog opened on top of the lightbox', async () => {
+	it.each(['dialog', 'alertdialog'])(
+		'leaves the arrows to a %s opened on top of the lightbox',
+		async (role) => {
+			open('a');
+			const other = document.createElement('div');
+			other.setAttribute('role', role);
+			// A button, not a text field: a field would be skipped by the earlier input check instead.
+			const control = document.createElement('button');
+			other.appendChild(control);
+			document.body.appendChild(other);
+
+			await fireEvent.keyDown(control, { key: 'ArrowRight' });
+
+			expect(screen.getByRole('heading', { name: 'a.jpg' })).toBeTruthy();
+			other.remove();
+		}
+	);
+});
+
+async function openMenu() {
+	await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+		button: 0,
+		ctrlKey: false,
+		pointerType: 'mouse'
+	});
+}
+
+describe('MediaLightbox header', () => {
+	it('goes back to the grid from the back button', async () => {
+		const result = open('a');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		result.unmount();
+	});
+
+	it('has no separate close button beside the back button', () => {
 		open('a');
-		const other = document.createElement('div');
-		other.setAttribute('role', 'dialog');
-		const field = document.createElement('input');
-		other.appendChild(field);
-		document.body.appendChild(other);
 
-		await fireEvent.keyDown(field, { key: 'ArrowRight' });
+		expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+	});
+});
 
-		expect(screen.getByRole('heading', { name: 'a.jpg' })).toBeTruthy();
-		other.remove();
+describe('MediaLightbox delete', () => {
+	function withDelete(ondelete = vi.fn().mockResolvedValue(undefined)) {
+		render(MediaLightbox, {
+			items: three,
+			openId: 'b',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			ondelete
+		} as never);
+		return ondelete;
+	}
+
+	it('asks first, and deletes the viewed item once confirmed', async () => {
+		const ondelete = withDelete();
+		await openMenu();
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+
+		expect(await screen.findByRole('alertdialog')).toBeTruthy();
+		expect(ondelete).not.toHaveBeenCalled();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+		await waitFor(() => expect(ondelete).toHaveBeenCalledWith('b'));
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+	});
+
+	it('deletes nothing when the confirmation is cancelled', async () => {
+		const ondelete = withDelete();
+		await openMenu();
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+		await screen.findByRole('alertdialog');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(ondelete).not.toHaveBeenCalled();
+	});
+
+	it('cannot be dismissed while the delete is in flight', async () => {
+		const pending = deferred<void>();
+		const ondelete = withDelete(vi.fn(() => pending.promise));
+		await openMenu();
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+		await screen.findByRole('alertdialog');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+		await waitFor(() => expect(ondelete).toHaveBeenCalledTimes(1));
+
+		expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(
+			true
+		);
+		await fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+		expect(screen.getByRole('alertdialog')).toBeTruthy();
+
+		pending.resolve();
+		await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+		expect(ondelete).toHaveBeenCalledTimes(1);
+	});
+
+	it('has no Delete entry when it is not given ondelete', async () => {
+		render(MediaLightbox, {
+			items: three,
+			openId: 'b',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			onaddtoalbum: vi.fn()
+		} as never);
+		await openMenu();
+
+		await screen.findByRole('menuitem', { name: 'Add to album' });
+		expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
 	});
 });

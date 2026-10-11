@@ -10,6 +10,7 @@
 	import { formatCount } from '#lib/albums/format.js';
 	import AddToAlbumDialog from '#lib/components/albums/add-to-album-dialog.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { deleteMedia } from '#lib/media/api.js';
 	import type { MediaItem, MediaPage } from '#lib/media/types.js';
 	import MediaGrid from './media-grid.svelte';
 	import MediaLightbox from './media-lightbox.svelte';
@@ -130,6 +131,21 @@
 		}
 	}
 
+	async function deleteOne(id: string) {
+		try {
+			await deleteMedia(id);
+			dropLocal([id]);
+			selected.delete(id);
+			toast.success('Deleted');
+			// The album strip's covers and counts change with it.
+			onalbumschanged?.();
+		} catch (e) {
+			toast.error("Couldn't delete", {
+				description: e instanceof Error ? e.message : 'Something went wrong'
+			});
+		}
+	}
+
 	async function remove(ids: string[]) {
 		if (!album || removing) return;
 		removing = true;
@@ -208,6 +224,7 @@
 	onloadmore={load}
 	onaddtoalbum={(id) => openPicker([id])}
 	onremovefromalbum={album ? (id) => remove([id]) : undefined}
+	ondelete={deleteOne}
 />
 
 <!-- After the lightbox on purpose: portalled dialogs stack in template order (same z-index), so the picker opened from the lightbox menu must come later in the DOM. -->

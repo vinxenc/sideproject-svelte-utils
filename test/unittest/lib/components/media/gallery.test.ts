@@ -245,6 +245,56 @@ describe('Gallery lightbox', () => {
 	});
 });
 
+describe('Gallery delete from the lightbox', () => {
+	async function openDelete() {
+		await fireEvent.click(screen.getByTitle('b.jpg'));
+		await screen.findByRole('heading', { name: 'b.jpg' });
+		await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+	}
+
+	it('deletes the item, drops it from the grid and moves the viewer to the next one', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? new Response(null, { status: 204 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('b.jpg');
+
+		await openDelete();
+
+		await waitFor(() => expect(tileNames(container)).toEqual(['a.jpg', 'c.jpg']));
+		expect(fetchMock).toHaveBeenCalledWith('/api/media/b', { method: 'DELETE' });
+		expect(toast.success).toHaveBeenCalledWith('Deleted');
+		expect(onalbumschanged).toHaveBeenCalled();
+		expect(await screen.findByRole('heading', { name: 'c.jpg' })).toBeTruthy();
+	});
+
+	it('keeps the item and says why when the server refuses', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ message: 'Not found' }, 404)
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		const { container } = render(Gallery);
+		await screen.findByTitle('b.jpg');
+
+		await openDelete();
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete", { description: 'Not found' })
+		);
+		expect(tileNames(container)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+	});
+});
+
 describe('Gallery paging from the lightbox', () => {
 	it('asks for the next page when the viewer pages near the end of the loaded items', async () => {
 		const six = Array.from({ length: 6 }, (_, i) =>
