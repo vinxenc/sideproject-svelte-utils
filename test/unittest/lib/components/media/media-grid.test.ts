@@ -213,9 +213,13 @@ describe('MediaGrid selecting', () => {
 
 		const [first, second] = tiles(container);
 		expect(first.getAttribute('aria-pressed')).toBe('true');
-		expect(first.className).toContain('ring-primary');
+		expect(first.className).not.toContain('ring-primary');
 		expect(second.getAttribute('aria-pressed')).toBe('false');
-		expect(second.className).not.toContain('ring-primary');
+		const [firstCircle, secondCircle] = ['a.jpg', 'b.jpg'].map((name) =>
+			screen.getByRole('button', { name: `Select ${name}` })
+		);
+		expect(firstCircle.className).toContain('bg-white');
+		expect(secondCircle.className).not.toContain('bg-white');
 
 		await fireEvent.click(second);
 		expect(ontoggle).toHaveBeenCalledWith('b');
