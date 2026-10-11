@@ -42,7 +42,9 @@ src/
     +page.server.ts        "/" redirects to /dashboard
     (app)/                 requires a session, else redirects to /sign-in
       dashboard/           landing page after sign-in/sign-up (sidebar-13 layout, full page)
+      passwords/           password vault: list, search, add, reveal, delete (see "Passwords" below)
     api/auth/[...all]/     Better Auth REST API (sign-in, sign-up, get-session, …)
+    api/passwords/         POST /api/passwords, DELETE /api/passwords/[id], POST /api/passwords/[id]/reveal (no-store)
     (guest)/               redirects signed-in users to /dashboard
       sign-in/  sign-up/   auth pages (shadcn blocks login-02, signup-02)
   env.ts                   env var definitions (read via $app/env/private)
@@ -53,11 +55,13 @@ src/
       session.ts           "app" side: verifies the access token with the public keys from /api/auth/jwks, refreshes via /api/auth/get-session
       prisma/              generated Prisma client (gitignored, `pnpm db:generate`)
     auth-client.ts         Better Auth Svelte client (authClient.signIn / useSession / …)
+    passwords/             shared password types and checks, avatar colours, search and tab-strip helpers, client API
     components/
       ui/                  shadcn-svelte components (generated, managed by the CLI)
       site-header.svelte   dark/light toggle (top-right); logo bar only in the desktop app title bar
       login-form.svelte    sign-in form
       signup-form.svelte   sign-up form
+      passwords/           password vault components (row, reveal, add and detail sheets)
     utils.ts               cn() + shadcn helper types
   service-worker/          offline caching (own tsconfig, WebWorker types)
 prisma/schema.prisma       Better Auth models (user, session, account, verification, jwks)
@@ -116,6 +120,14 @@ pnpm preview        # http://localhost:4173
 ```
 
 Then open it in Chrome or Edge and use the install icon in the address bar to install it as a desktop app. `localhost` counts as a secure origin, so installation works locally.
+
+## Passwords
+
+The vault at `/passwords` keeps one user's entries: a name, a type (app, credit card, API key or PIN platform), an optional username or email, and a password.
+
+- **Phase 1 stores passwords as plain text** in the `password` table, so anyone with database access can read them. This is an interim state.
+- The list and page data never include a password. Reveal is a `POST /api/passwords/:id/reveal` answered with `Cache-Control: private, no-store`, and the service worker never caches it.
+- Phase 2 (encryption and passkeys) is planned in [docs/password-management-plan.md](docs/password-management-plan.md).
 
 ## Scripts
 

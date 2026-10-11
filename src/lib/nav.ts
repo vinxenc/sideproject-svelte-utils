@@ -5,6 +5,7 @@ import CheckIcon from '@lucide/svelte/icons/check';
 import GlobeIcon from '@lucide/svelte/icons/globe';
 import HouseIcon from '@lucide/svelte/icons/house';
 import KeyboardIcon from '@lucide/svelte/icons/keyboard';
+import KeyRoundIcon from '@lucide/svelte/icons/key-round';
 import LinkIcon from '@lucide/svelte/icons/link';
 import LockIcon from '@lucide/svelte/icons/lock';
 import MenuIcon from '@lucide/svelte/icons/menu';
@@ -19,6 +20,7 @@ export type NavItem = { name: string; slug: string; icon: typeof HouseIcon };
 export const NAV: NavItem[] = [
 	{ name: 'Home', slug: 'home', icon: HouseIcon },
 	{ name: 'Photo & video', slug: 'photo-video', icon: VideoIcon },
+	{ name: 'Passwords', slug: 'passwords', icon: KeyRoundIcon },
 	{ name: 'Notifications', slug: 'notifications', icon: BellIcon },
 	{ name: 'Navigation', slug: 'navigation', icon: MenuIcon },
 	{ name: 'Appearance', slug: 'appearance', icon: PaintbrushIcon },
@@ -33,10 +35,14 @@ export const NAV: NavItem[] = [
 export const PHOTO_VIDEO = 'photo-video';
 /** Photo & video has its own pages: the library, the album list and each album. */
 export const PHOTO_VIDEO_HREF = '/photo-video';
+export const PASSWORDS = 'passwords';
+/** The password vault has its own page. */
+export const PASSWORDS_HREF = '/passwords';
 
-/** 'home' -> '/dashboard'; 'photo-video' -> '/photo-video'; anything else -> `/dashboard?section=${slug}` */
+/** 'home' -> '/dashboard'; 'photo-video' -> '/photo-video'; 'passwords' -> '/passwords'; anything else -> `/dashboard?section=${slug}` */
 export function sectionHref(slug: string) {
 	if (slug === PHOTO_VIDEO) return PHOTO_VIDEO_HREF;
+	if (slug === PASSWORDS) return PASSWORDS_HREF;
 	return slug === 'home' ? '/dashboard' : `/dashboard?section=${slug}`;
 }
 
@@ -49,9 +55,10 @@ export function sectionOf(url: PageUrl): NavItem {
 	return NAV.find((item) => item.slug === slug) ?? NAV[0];
 }
 
-/** Highlighted slug: 'photo-video' for every page under /photo-video, otherwise sectionOf(url).slug. */
+/** Highlighted slug: 'photo-video' for every page under /photo-video, 'passwords' for every page under /passwords, otherwise sectionOf(url).slug. */
 export function activeSlug(routeId: string | null, url: PageUrl): string {
 	if (routeId?.startsWith('/(app)/photo-video')) return PHOTO_VIDEO;
+	if (routeId?.startsWith('/(app)/passwords')) return PASSWORDS;
 	return sectionOf(url).slug;
 }
 
@@ -61,6 +68,7 @@ export type Crumb = { label: string; href?: string };
  * '/(app)/photo-video'              -> [{ label: 'Photo & video' }]
  * '/(app)/photo-video/albums'       -> [{ 'Photo & video', href: '/photo-video' }, { label: 'Album' }]
  * '/(app)/photo-video/albums/[id]'  -> [{ 'Photo & video', href: '/photo-video' }, { label: 'Album', href: '/photo-video/albums' }, { label: data.album?.name ?? 'Album' }]
+ * '/(app)/passwords'                -> [{ label: 'Passwords' }]
  * anything else                     -> [{ label: sectionOf(url).name }]   (no "Settings >" crumb)
  */
 export function crumbsFor(
@@ -70,6 +78,7 @@ export function crumbsFor(
 ): Crumb[] {
 	const photoVideo = { label: 'Photo & video', href: PHOTO_VIDEO_HREF };
 	if (routeId === '/(app)/photo-video') return [{ label: 'Photo & video' }];
+	if (routeId === '/(app)/passwords') return [{ label: 'Passwords' }];
 	if (routeId === '/(app)/photo-video/albums') return [photoVideo, { label: 'Album' }];
 	if (routeId === '/(app)/photo-video/albums/[id]')
 		return [

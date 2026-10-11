@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { activeSlug, crumbsFor, NAV, PHOTO_VIDEO, sectionHref, sectionOf } from '#lib/nav.js';
+import {
+	activeSlug,
+	crumbsFor,
+	NAV,
+	PASSWORDS,
+	PASSWORDS_HREF,
+	PHOTO_VIDEO,
+	sectionHref,
+	sectionOf
+} from '#lib/nav.js';
 
 const url = (query = '') => new URL(`http://localhost/dashboard${query}`);
 
 describe('NAV', () => {
-	it('lists the 12 sections in the original order, each with a slug', () => {
+	it('lists the 13 sections in the original order, Passwords third, each with a slug', () => {
 		expect(NAV.map((item) => item.slug)).toEqual([
 			'home',
 			'photo-video',
+			'passwords',
 			'notifications',
 			'navigation',
 			'appearance',
@@ -20,7 +30,9 @@ describe('NAV', () => {
 			'advanced'
 		]);
 		expect(NAV[1].name).toBe('Photo & video');
+		expect(NAV[2]).toMatchObject({ name: 'Passwords', slug: PASSWORDS });
 		expect(PHOTO_VIDEO).toBe('photo-video');
+		expect(PASSWORDS_HREF).toBe('/passwords');
 	});
 });
 
@@ -32,6 +44,10 @@ describe('sectionHref', () => {
 
 	it('links Photo & video to its own page', () => {
 		expect(sectionHref('photo-video')).toBe('/photo-video');
+	});
+
+	it('links Passwords to its own page', () => {
+		expect(sectionHref('passwords')).toBe('/passwords');
 	});
 });
 
@@ -53,6 +69,11 @@ describe('activeSlug', () => {
 		expect(activeSlug('/(app)/photo-video/albums/[id]', url('?section=advanced'))).toBe(
 			'photo-video'
 		);
+	});
+
+	it('highlights Passwords on every page under /passwords', () => {
+		expect(activeSlug('/(app)/passwords', url())).toBe('passwords');
+		expect(activeSlug('/(app)/passwords', url('?section=advanced'))).toBe('passwords');
 	});
 
 	it('otherwise highlights the section in the URL', () => {
@@ -83,6 +104,10 @@ describe('crumbsFor', () => {
 		expect(crumbsFor('/(app)/photo-video/albums/[id]', url(), {}).at(-1)).toEqual({
 			label: 'Album'
 		});
+	});
+
+	it('shows Passwords on its page', () => {
+		expect(crumbsFor('/(app)/passwords', url(), {})).toEqual([{ label: 'Passwords' }]);
 	});
 
 	it('shows only Photo & video on its page, and only the section name elsewhere', () => {

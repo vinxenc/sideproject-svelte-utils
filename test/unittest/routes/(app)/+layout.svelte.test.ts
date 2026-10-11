@@ -81,6 +81,25 @@ describe('app layout on desktop', () => {
 		expect(navLink('Advanced')?.getAttribute('href')).toBe('/dashboard?section=advanced');
 	});
 
+	it('lists Passwords after Photo & video, linked to its own page', () => {
+		render(Layout, { props: { data, children } });
+
+		expect(navLink('Passwords')?.getAttribute('href')).toBe('/passwords');
+		const names = [...document.querySelectorAll('[data-sidebar="menu-button"]')].map((a) =>
+			a.textContent?.trim()
+		);
+		expect(names.slice(1, 3)).toEqual(['Photo & video', 'Passwords']);
+	});
+
+	it('highlights Passwords on its page and titles it "Passwords · Utilities"', async () => {
+		at('/(app)/passwords', '/passwords');
+		render(Layout, { props: { data, children } });
+
+		await waitFor(() => expect(document.title).toBe('Passwords · Utilities'));
+		expect(navLink('Passwords')?.getAttribute('data-active')).toBe('true');
+		expect(crumb('Passwords')?.getAttribute('data-slot')).toBe('breadcrumb-page');
+	});
+
 	it('highlights Photo & video on its pages and titles them, with no Settings crumb', async () => {
 		at('/(app)/photo-video', '/photo-video');
 		render(Layout, { props: { data, children } });
