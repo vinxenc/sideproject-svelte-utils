@@ -22,5 +22,12 @@ export const variables = defineEnvVars({
 	},
 	S3_SECRET_ACCESS_KEY: {
 		description: 'S3 secret key; local: RUSTFS_SECRET_KEY in docker-compose.yml.'
+	},
+	SMTP_URL: {
+		description:
+			'SMTP connection URL for outgoing mail (smtp://user:pass@host:port, smtps:// for TLS). Local: Mailpit from docker-compose.yml, UI at http://localhost:8025.'
+	},
+	MAIL_FROM: {
+		description: 'Sender of outgoing mail, e.g. "Utilities <no-reply@example.com>".'
 	}
 });
