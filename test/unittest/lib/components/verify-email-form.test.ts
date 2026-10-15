@@ -2,11 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/sv
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import VerifyEmailForm from '#lib/components/verify-email-form.svelte';
-import { PENDING_KEY } from '#lib/verify-email.js';
+import { PENDING_KEY, holdPassword } from '#lib/verify-email.js';
 import { deferred } from '../../helpers/media.js';
 
 const auth = vi.hoisted(() => ({
-	emailOtp: { verifyEmail: vi.fn(), sendVerificationOtp: vi.fn() }
+	$fetch: vi.fn(),
+	emailOtp: { sendVerificationOtp: vi.fn() }
 }));
 const nav = vi.hoisted(() => ({ goto: vi.fn() }));
 vi.mock('#lib/auth-client.js', () => ({ authClient: auth }));
@@ -29,6 +30,7 @@ const verifyButton = () => screen.getByRole('button', { name: /^Verif/ }) as HTM
 beforeEach(() => {
 	vi.clearAllMocks();
 	sessionStorage.clear();
+	holdPassword('hunter22pw'); // what sign-up or sign-in just typed
 });
 
 afterEach(() => {
@@ -57,15 +59,15 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 
 	it('verifies the six digits, forgets the pending email and goes to /dashboard', async () => {
 		storePending(120_000);
-		auth.emailOtp.verifyEmail.mockResolvedValue({ data: { status: true }, error: null });
+		auth.$fetch.mockResolvedValue({ data: { status: true }, error: null });
 		render(VerifyEmailForm);
 
 		await typeCode('123456');
 
 		await waitFor(() =>
-			expect(auth.emailOtp.verifyEmail).toHaveBeenCalledWith({
-				email: 'ann@example.com',
-				otp: '123456'
+			expect(auth.$fetch).toHaveBeenCalledWith('/email-otp/verify-email', {
+				method: 'POST',
+				body: { email: 'ann@example.com', otp: '123456', password: 'hunter22pw' }
 			})
 		);
 		await waitFor(() =>
@@ -76,7 +78,7 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 
 	it('shows the wrong-code message, clears the boxes and keeps the input usable', async () => {
 		storePending(120_000);
-		auth.emailOtp.verifyEmail.mockResolvedValue({
+		auth.$fetch.mockResolvedValue({
 			error: { status: 400, code: 'INVALID_OTP', message: 'Invalid OTP' }
 		});
 		render(VerifyEmailForm);
@@ -84,7 +86,7 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 		await typeCode('000000');
 
 		expect(
-			await screen.findByText('That code is not right. Check the email and try again.')
+			await screen.findByText(/That code is not right, or this email was started/)
 		).toBeTruthy();
 		expect((screen.getByLabelText('Verification code') as HTMLInputElement).disabled).toBe(false);
 		expect(nav.goto).not.toHaveBeenCalled();
@@ -92,7 +94,7 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 
 	it('disables the input and Verify after too many wrong codes, and a successful resend re-enables them', async () => {
 		storePending(120_000);
-		auth.emailOtp.verifyEmail.mockResolvedValue({
+		auth.$fetch.mockResolvedValue({
 			error: { status: 403, code: 'TOO_MANY_ATTEMPTS', message: 'Too many attempts' }
 		});
 		auth.emailOtp.sendVerificationOtp.mockResolvedValue({ data: { success: true }, error: null });
@@ -112,7 +114,7 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 
 	it('shows the wait message when verify is rate limited (429)', async () => {
 		storePending(120_000);
-		auth.emailOtp.verifyEmail.mockResolvedValue({ error: { status: 429, message: 'Too many' } });
+		auth.$fetch.mockResolvedValue({ error: { status: 429, message: 'Too many' } });
 		render(VerifyEmailForm);
 
 		await typeCode('000000');
@@ -122,7 +124,7 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 
 	it('shows the network message when the verify request fails', async () => {
 		storePending(120_000);
-		auth.emailOtp.verifyEmail.mockRejectedValue(new TypeError('offline'));
+		auth.$fetch.mockRejectedValue(new TypeError('offline'));
 		render(VerifyEmailForm);
 
 		await typeCode('000000');
@@ -130,20 +132,20 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 		expect(await screen.findByText('Could not reach the server. Try again.')).toBeTruthy();
 		// The boxes clear, so re-enabling the input does not submit the same code again.
 		await tick();
-		expect(auth.emailOtp.verifyEmail).toHaveBeenCalledTimes(1);
+		expect(auth.$fetch).toHaveBeenCalledTimes(1);
 	});
 
 	it('shows Verifying… and disables the button while the verify is pending, sending only one request', async () => {
 		storePending(120_000);
 		const reply = deferred<{ error: null }>();
-		auth.emailOtp.verifyEmail.mockReturnValue(reply.promise);
+		auth.$fetch.mockReturnValue(reply.promise);
 		render(VerifyEmailForm);
 
 		await typeCode('123456');
 
 		const pending = await screen.findByRole('button', { name: 'Verifying…' });
 		expect((pending as HTMLButtonElement).disabled).toBe(true);
-		expect(auth.emailOtp.verifyEmail).toHaveBeenCalledTimes(1);
+		expect(auth.$fetch).toHaveBeenCalledTimes(1);
 
 		reply.resolve({ error: null });
 		await waitFor(() => expect(nav.goto).toHaveBeenCalled());
@@ -193,6 +195,53 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Resend code' }));
 
 		expect(await screen.findByText('Could not reach the server. Try again.')).toBeTruthy();
+	});
+});
+
+describe('VerifyEmailForm password proof', () => {
+	it('hides the password field when sign-up or sign-in just typed the password', async () => {
+		storePending(120_000);
+		render(VerifyEmailForm);
+
+		await screen.findByText('an******@example.com');
+
+		expect(screen.queryByLabelText('Password')).toBeNull();
+	});
+
+	it('asks for the password after a reload, and sends the typed one', async () => {
+		holdPassword('');
+		storePending(120_000);
+		auth.$fetch.mockResolvedValue({ data: { status: true }, error: null });
+		render(VerifyEmailForm);
+		const field = await screen.findByLabelText('Password');
+		await fireEvent.input(field, { target: { value: 'typed-again' } });
+
+		await typeCode('123456');
+
+		await waitFor(() =>
+			expect(auth.$fetch).toHaveBeenCalledWith('/email-otp/verify-email', {
+				method: 'POST',
+				body: { email: 'ann@example.com', otp: '123456', password: 'typed-again' }
+			})
+		);
+	});
+
+	it('asks for the password when the code is entered without one, and makes no request', async () => {
+		holdPassword('');
+		storePending(120_000);
+		render(VerifyEmailForm);
+		await screen.findByLabelText('Password');
+
+		await typeCode('123456');
+
+		expect(await screen.findByText('Enter your password first.')).toBeTruthy();
+		expect(auth.$fetch).not.toHaveBeenCalled();
+	});
+
+	it('links to sign-up so the person can start over', () => {
+		render(VerifyEmailForm);
+
+		expect(screen.getByRole('link', { name: 'Start over' }).getAttribute('href')).toBe('/sign-up');
 	});
 });
 

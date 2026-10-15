@@ -5,7 +5,7 @@
 	import { authClient } from '#lib/auth-client.js';
 	import { goto } from '$app/navigation';
 	import { cn } from '#lib/utils.js';
-	import { rememberPending } from '#lib/verify-email.js';
+	import { holdPassword, rememberPending } from '#lib/verify-email.js';
 	import type { HTMLAttributes } from 'svelte/elements';
 
 	let { class: className, ...restProps }: HTMLAttributes<HTMLFormElement> = $props();
@@ -26,6 +26,7 @@
 			if (result.error) {
 				if (result.error.status === 403 && result.error.code === 'EMAIL_NOT_VERIFIED') {
 					rememberPending(email.trim(), Date.now()); // sign-in just mailed a fresh code (sendOnSignIn)
+					holdPassword(password);
 					await goto('/verify-email');
 					return;
 				}

@@ -37,7 +37,21 @@ export function readPending(): PendingVerification | null {
 	}
 }
 
+// The password the person just typed at sign-up or sign-in, kept in memory only (never in storage or the URL)
+// so the verify page can prove it without asking again. A reload drops it and the page asks. Call holdPassword
+// only from browser event handlers: a module variable set during SSR would be shared between requests.
+let heldPassword = '';
+
+export function holdPassword(password: string): void {
+	heldPassword = password;
+}
+
+export function readHeldPassword(): string {
+	return heldPassword;
+}
+
 export function forgetPending(): void {
+	heldPassword = '';
 	try {
 		sessionStorage.removeItem(PENDING_KEY);
 	} catch {
@@ -63,8 +77,10 @@ export function describeVerifyError(error: AuthClientError): VerifyErrorView {
 	}
 	switch (error.code) {
 		case 'INVALID_OTP':
+			// Also the answer for a wrong password: the server does not say which one it was.
 			return {
-				message: 'That code is not right. Check the email and try again.',
+				message:
+					'That code is not right, or this email was started with a different password. Check the code, or sign up again to start over.',
 				needsNewCode: false
 			};
 		case 'OTP_EXPIRED':

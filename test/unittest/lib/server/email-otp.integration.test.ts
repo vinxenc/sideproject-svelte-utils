@@ -113,7 +113,7 @@ describe('EmailOtp on the real emailOTP engine', () => {
 		expect(memDb.verification).toHaveLength(1);
 		const [row] = memDb.verification;
 		// Guards the hand-copied identifier format: a Better Auth change to the prefix or the lowercasing fails here.
-		expect(row.identifier).toBe('email-verification-otp-ann@example.com');
+		expect(row.identifier).toBe('sign-in-otp-ann@example.com');
 		expect(row.identifier).toBe(otpIdentifier(EMAIL));
 		// storeOTP: 'hashed' stores the base64url SHA-256 of the code, then the attempt counter.
 		expect(row.value).toBe(`${createHash('sha256').update(code).digest('base64url')}:0`);

@@ -4,7 +4,11 @@ import { memoryAdapter, type MemoryDB } from 'better-auth/adapters/memory';
 import { emailOTP } from 'better-auth/plugins';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EMAIL_OTP_ENGINE } from '#lib/server/email-otp.js';
-import { EMAIL_VERIFICATION, sendVerificationCode } from '#lib/server/email-verification.js';
+import {
+	EMAIL_VERIFICATION,
+	EMAIL_VERIFICATION_HOOKS,
+	sendVerificationCode
+} from '#lib/server/email-verification.js';
 import { FakeMailer } from '../../helpers/email-otp.js';
 
 const EMAIL = 'Ann@Example.com';
@@ -22,6 +26,7 @@ function setup() {
 		database: memoryAdapter(memDb),
 		emailAndPassword: { enabled: true, requireEmailVerification: true },
 		emailVerification: EMAIL_VERIFICATION,
+		hooks: EMAIL_VERIFICATION_HOOKS,
 		plugins: [
 			emailOTP({
 				...EMAIL_OTP_ENGINE,
@@ -45,8 +50,20 @@ function codeOf(error: unknown): unknown {
 	return (error as { body?: { code?: unknown } }).body?.code;
 }
 
-async function signUp(auth: ReturnType<typeof setup>['auth']) {
-	return auth.api.signUpEmail({ body: { email: EMAIL, password: PASSWORD, name: 'Ann' } });
+type TestAuth = ReturnType<typeof setup>['auth'];
+
+async function signUp(auth: TestAuth, password = PASSWORD) {
+	return auth.api.signUpEmail({ body: { email: EMAIL, password, name: 'Ann' } });
+}
+
+/**
+ * The verify call as the form sends it: the hook reads the password from the raw body, which the typed API
+ * does not know (the endpoint schema drops it).
+ */
+function verify(auth: TestAuth, otp: string, password: unknown = PASSWORD, email: unknown = EMAIL) {
+	return auth.api.verifyEmailOTP({
+		body: { email, otp, password } as { email: string; otp: string }
+	});
 }
 
 /**
@@ -92,14 +109,15 @@ describe('sign-up verification on the real emailOTP plugin', () => {
 		await signUp(auth);
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
 
-		await expect(
-			auth.api.verifyEmailOTP({ body: { email: EMAIL, otp: '000000' } })
-		).rejects.toMatchObject({
+		await expect(verify(auth, '000000')).rejects.toMatchObject({
 			body: { code: 'INVALID_OTP' }
 		});
 
 		const { headers, response } = await auth.api.verifyEmailOTP({
-			body: { email: EMAIL, otp: codeIn(mailer) },
+			body: { email: EMAIL, otp: codeIn(mailer), password: PASSWORD } as {
+				email: string;
+				otp: string;
+			},
 			returnHeaders: true
 		});
 		expect(response.status).toBe(true);
@@ -116,15 +134,11 @@ describe('sign-up verification on the real emailOTP plugin', () => {
 		const code = codeIn(mailer);
 
 		for (let attempt = 0; attempt < 5; attempt++) {
-			await expect(
-				auth.api.verifyEmailOTP({ body: { email: EMAIL, otp: '000000' } })
-			).rejects.toMatchObject({
+			await expect(verify(auth, '000000')).rejects.toMatchObject({
 				body: { code: 'INVALID_OTP' }
 			});
 		}
-		const locked = await auth.api
-			.verifyEmailOTP({ body: { email: EMAIL, otp: code } })
-			.catch((e: unknown) => e);
+		const locked = await verify(auth, code).catch((e: unknown) => e);
 		expect(locked).toMatchObject({ status: 'FORBIDDEN' });
 		expect(codeOf(locked)).toBe('TOO_MANY_ATTEMPTS');
 		expect(memDb.user[0].emailVerified).toBe(false);
@@ -132,9 +146,7 @@ describe('sign-up verification on the real emailOTP plugin', () => {
 
 		await auth.api.sendVerificationOTP({ body: { email: EMAIL, type: 'email-verification' } });
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(2));
-		await expect(
-			auth.api.verifyEmailOTP({ body: { email: EMAIL, otp: codeIn(mailer) } })
-		).resolves.toMatchObject({ status: true });
+		await expect(verify(auth, codeIn(mailer))).resolves.toMatchObject({ status: true });
 	});
 
 	it('invalidates the previous code when a new one is sent', async () => {
@@ -151,21 +163,17 @@ describe('sign-up verification on the real emailOTP plugin', () => {
 		const second = codeIn(mailer);
 		expect(second).not.toBe(first);
 
-		await expect(
-			auth.api.verifyEmailOTP({ body: { email: EMAIL, otp: first } })
-		).rejects.toMatchObject({
+		await expect(verify(auth, first)).rejects.toMatchObject({
 			body: { code: 'INVALID_OTP' }
 		});
-		await expect(
-			auth.api.verifyEmailOTP({ body: { email: EMAIL, otp: second } })
-		).resolves.toMatchObject({ status: true });
+		await expect(verify(auth, second)).resolves.toMatchObject({ status: true });
 	});
 
 	it('mails nothing to a verified user, and the send still answers success', async () => {
 		const { auth, mailer } = setup();
 		await signUp(auth);
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
-		await auth.api.verifyEmailOTP({ body: { email: EMAIL, otp: codeIn(mailer) } });
+		await verify(auth, codeIn(mailer));
 
 		await expect(
 			auth.api.sendVerificationOTP({ body: { email: EMAIL, type: 'email-verification' } })
@@ -184,9 +192,7 @@ describe('sign-up verification on the real emailOTP plugin', () => {
 		});
 		expect(memDb.verification).toHaveLength(1);
 
-		const error = await auth.api
-			.verifyEmailOTP({ body: { email: EMAIL, otp: code } })
-			.catch((e: unknown) => e);
+		const error = await verify(auth, code).catch((e: unknown) => e);
 
 		expect(codeOf(error)).toBe('EMAIL_ALREADY_VERIFIED');
 		expect(memDb.session).toHaveLength(0);
@@ -201,13 +207,9 @@ describe('sign-up verification on the real emailOTP plugin', () => {
 
 		vi.setSystemTime(Date.now() + 601_000);
 
-		const first = await auth.api
-			.verifyEmailOTP({ body: { email: EMAIL, otp: code } })
-			.catch((e: unknown) => e);
+		const first = await verify(auth, code).catch((e: unknown) => e);
 		expect(codeOf(first)).toBe('OTP_EXPIRED');
-		const second = await auth.api
-			.verifyEmailOTP({ body: { email: EMAIL, otp: code } })
-			.catch((e: unknown) => e);
+		const second = await verify(auth, code).catch((e: unknown) => e);
 		expect(codeOf(second)).toBe('INVALID_OTP');
 	});
 
@@ -226,26 +228,199 @@ describe('sign-up verification on the real emailOTP plugin', () => {
 		expect(memDb.session).toHaveLength(0);
 	});
 
-	it('answers a second sign-up with the same email with no token and mails nothing', async () => {
-		const { auth, mailer } = setup();
+	it('refuses a sign-up with type sign-in on the open send route, with no mail and no row', async () => {
+		const { auth, memDb, mailer } = setup();
 		await signUp(auth);
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
+		const rows = memDb.verification.length;
 
-		const again = await signUp(auth);
+		for (const type of ['sign-in', 'forget-password', 'change-email']) {
+			await expect(
+				auth.api.sendVerificationOTP({ body: { email: EMAIL, type: type as 'sign-in' } })
+			).rejects.toMatchObject({ status: 'BAD_REQUEST' });
+		}
+
+		expect(mailer.messages).toHaveLength(1);
+		expect(memDb.verification).toHaveLength(rows);
+	});
+});
+
+describe('pre-registration hijack', () => {
+	const ATTACKER_PASSWORD = 'attacker knows this';
+
+	/** The attacker signs up first with the victim's email; the victim's mailbox gets the code. */
+	async function preRegistered() {
+		const ctx = setup();
+		await signUp(ctx.auth, ATTACKER_PASSWORD);
+		await vi.waitFor(() => expect(ctx.mailer.messages).toHaveLength(1));
+		return ctx;
+	}
+
+	it('does not let the victim verify into the attacker password, and costs no attempt', async () => {
+		const { auth, memDb, mailer } = await preRegistered();
+		const code = codeIn(mailer);
+
+		const error = await verify(auth, code, PASSWORD).catch((e: unknown) => e);
+
+		expect(error).toMatchObject({ status: 'BAD_REQUEST' });
+		expect(codeOf(error)).toBe('INVALID_OTP');
+		expect(memDb.user[0].emailVerified).toBe(false);
+		expect(memDb.session).toHaveLength(0);
+		// Not consumed, not counted: whoever knows the account password and holds the mailbox still gets in.
+		await expect(verify(auth, code, ATTACKER_PASSWORD)).resolves.toMatchObject({ status: true });
+	});
+
+	it.each([
+		['no password', undefined],
+		['an empty password', ''],
+		['a non-string password', 12345678]
+	])('answers %s like a wrong code', async (_label, password) => {
+		const { auth, memDb, mailer } = await preRegistered();
+
+		const error = await verify(auth, codeIn(mailer), password).catch((e: unknown) => e);
+
+		expect(error).toMatchObject({ status: 'BAD_REQUEST' });
+		expect(codeOf(error)).toBe('INVALID_OTP');
+		expect(memDb.user[0].emailVerified).toBe(false);
+	});
+
+	it('answers an unknown email exactly like a wrong password', async () => {
+		const { auth, mailer } = await preRegistered();
+		const known = await verify(auth, codeIn(mailer), 'wrong').catch((e: unknown) => e);
+
+		const unknown = await verify(auth, '123456', 'wrong', 'nobody@example.com').catch(
+			(e: unknown) => e
+		);
+
+		expect(unknown).toMatchObject({ status: 'BAD_REQUEST' });
+		expect(codeOf(unknown)).toBe(codeOf(known));
+		expect((unknown as Error).message).toBe((known as Error).message);
+	});
+
+	it('leaves a non-string email to the plugin schema', async () => {
+		const { auth } = await preRegistered();
+
+		await expect(verify(auth, '123456', PASSWORD, 42)).rejects.toThrow(/email/);
+	});
+
+	it('re-claims the account when the victim signs up: new password, new code, old code and password dead', async () => {
+		const { auth, memDb, mailer } = await preRegistered();
+		const attackerCode = codeIn(mailer);
+		const attackerId = memDb.user[0].id;
+
+		await signUp(auth, PASSWORD);
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(2));
+
+		expect(memDb.user).toHaveLength(1);
+		expect(memDb.user[0].id).not.toBe(attackerId);
+		expect(memDb.account).toHaveLength(1);
+		expect(codeIn(mailer)).not.toBe(attackerCode);
+		// The attacker's password no longer matches the account, and the attacker's code is gone.
+		await expect(verify(auth, codeIn(mailer), ATTACKER_PASSWORD)).rejects.toMatchObject({
+			body: { code: 'INVALID_OTP' }
+		});
+		await expect(verify(auth, attackerCode, PASSWORD)).rejects.toMatchObject({
+			body: { code: 'INVALID_OTP' }
+		});
+		await expect(verify(auth, codeIn(mailer), PASSWORD)).resolves.toMatchObject({ status: true });
+		expect(memDb.session).toHaveLength(1);
+	});
+
+	it('lets a later re-claim win over the victim, who then cannot verify with the attacker code', async () => {
+		const { auth, memDb, mailer } = await preRegistered();
+		await signUp(auth, PASSWORD); // the victim
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(2));
+		await signUp(auth, ATTACKER_PASSWORD); // the attacker again, after the victim
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(3));
+
+		// The victim types their own password with the newest code (mailed by the attacker's sign-up).
+		await expect(verify(auth, codeIn(mailer), PASSWORD)).rejects.toMatchObject({
+			body: { code: 'INVALID_OTP' }
+		});
+		expect(memDb.user[0].emailVerified).toBe(false);
+		expect(memDb.session).toHaveLength(0);
+	});
+
+	it('does not re-claim a verified account: same user, same password, no mail', async () => {
+		const { auth, memDb, mailer } = setup();
+		await signUp(auth);
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
+		await verify(auth, codeIn(mailer));
+		const id = memDb.user[0].id;
+
+		const again = await signUp(auth, ATTACKER_PASSWORD);
 
 		expect(again.token).toBeNull();
+		expect(memDb.user).toHaveLength(1);
+		expect(memDb.user[0].id).toBe(id);
+		expect(mailer.messages).toHaveLength(1);
+		await expect(
+			auth.api.signInEmail({ body: { email: EMAIL, password: PASSWORD } })
+		).resolves.toMatchObject({ token: expect.any(String) });
+	});
+
+	it('does not re-claim an unverified account that has a session', async () => {
+		const { auth, memDb, mailer } = setup();
+		await signUp(auth);
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
+		const id = memDb.user[0].id;
+		memDb.session.push({
+			id: 's1',
+			token: 't1',
+			userId: id,
+			expiresAt: new Date(Date.now() + 60_000),
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+
+		await signUp(auth, ATTACKER_PASSWORD);
+
+		expect(memDb.user).toHaveLength(1);
+		expect(memDb.user[0].id).toBe(id);
 		expect(mailer.messages).toHaveLength(1);
 	});
 
-	it('mails nothing for a sign-in code sent to an unverified user', async () => {
-		const { auth, mailer } = setup();
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+	it('deletes nothing when the new sign-up is one the core would refuse (short password)', async () => {
+		const { auth, memDb, mailer } = setup();
 		await signUp(auth);
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
+		const id = memDb.user[0].id;
 
-		await auth.api.sendVerificationOTP({ body: { email: EMAIL, type: 'sign-in' } });
+		await expect(signUp(auth, 'short')).rejects.toMatchObject({ status: 'BAD_REQUEST' });
 
-		expect(mailer.messages).toHaveLength(1);
-		expect(warn).toHaveBeenCalled();
+		expect(memDb.user[0].id).toBe(id);
+	});
+
+	it('ignores a sign-up body without a string email or password', async () => {
+		const { auth, memDb, mailer } = setup();
+		await signUp(auth);
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
+		const id = memDb.user[0].id;
+
+		await expect(
+			auth.api.signUpEmail({ body: { email: 42, password: PASSWORD, name: 'Ann' } as never })
+		).rejects.toBeDefined();
+		await expect(
+			auth.api.signUpEmail({ body: { email: EMAIL, password: 42, name: 'Ann' } as never })
+		).rejects.toBeDefined();
+
+		expect(memDb.user[0].id).toBe(id);
+	});
+});
+
+describe('OTP type separation', () => {
+	it('leaves a step-up (sign-in type) code alone when the open send route is called for it', async () => {
+		const { auth, memDb } = setup();
+		await signUp(auth);
+		await auth.api.createVerificationOTP({ body: { email: EMAIL, type: 'sign-in' } });
+		const before = memDb.verification.filter((v) => v.identifier.startsWith('sign-in-otp-'));
+
+		await expect(
+			auth.api.sendVerificationOTP({ body: { email: EMAIL, type: 'sign-in' } })
+		).rejects.toMatchObject({ status: 'BAD_REQUEST' });
+
+		const after = memDb.verification.filter((v) => v.identifier.startsWith('sign-in-otp-'));
+		expect(after).toEqual(before);
+		expect(before).toHaveLength(1);
 	});
 });

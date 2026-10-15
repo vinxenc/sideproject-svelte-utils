@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginForm from '#lib/components/login-form.svelte';
+import { forgetPending, readHeldPassword } from '#lib/verify-email.js';
 import { deferred } from '../../helpers/media.js';
 
 const auth = vi.hoisted(() => ({ signIn: { email: vi.fn() } }));
@@ -11,6 +12,7 @@ vi.mock('$app/navigation', () => nav);
 beforeEach(() => {
 	vi.clearAllMocks();
 	sessionStorage.clear();
+	forgetPending();
 });
 
 afterEach(cleanup);
@@ -92,6 +94,7 @@ describe('LoginForm', () => {
 		const stored = JSON.parse(sessionStorage.getItem('utilities:verify-email') ?? 'null');
 		expect(stored.email).toBe('ann@example.com');
 		expect(typeof stored.sentAt).toBe('number');
+		expect(readHeldPassword()).toBe('hunter2');
 	});
 
 	it('shows the message for another 403 and stays put', async () => {

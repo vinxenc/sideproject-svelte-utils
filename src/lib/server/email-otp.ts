@@ -4,7 +4,10 @@ export const OTP_LENGTH = 6;
 export const OTP_EXPIRES_SECONDS = 600; // 10 min
 export const OTP_ALLOWED_ATTEMPTS = 5;
 export const OTP_RESEND_SECONDS = 60;
-export const OTP_TYPE = 'email-verification' as const;
+// Not 'email-verification': the open sign-up routes serve that type, so a step-up code under it could be
+// overwritten or burned over HTTP. 'sign-in' is refused by the open send route (email-verification.ts) and
+// its consumer route, sign-in/email-otp, answers 404. EmailOtp only uses the server-side create / check calls.
+export const OTP_TYPE = 'sign-in' as const;
 
 /** The emailOTP plugin options (the engine). auth.ts and the integration test both spread this. */
 export const EMAIL_OTP_ENGINE = {
@@ -98,7 +101,7 @@ function serialise<T>(email: string, task: () => Promise<T>): Promise<T> {
  * is the engine. One code per email: a second consumer needs its own OTP type, or a code requested for
  * one flow would satisfy the other.
  */
-// ponytail: one in-flight code per email (Better Auth keys rows by type + email); a second consumer needs its own type or purpose, or a code requested for one flow satisfies the other.
+// ponytail: one in-flight code per email (Better Auth keys rows by type + email); a second consumer needs a type of its own that no open route serves, or a code requested for one flow satisfies the other.
 export class EmailOtp {
 	#api: EmailOtpApi;
 	#db: EmailOtpStore;

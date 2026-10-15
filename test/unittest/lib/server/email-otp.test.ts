@@ -57,7 +57,7 @@ describe('EmailOtp.send', () => {
 
 		expect(mailer.messages).toHaveLength(1);
 		expect(mailer.messages[0].to).toBe('ann@example.com');
-		expect(rows.map((row) => row.identifier)).toEqual(['email-verification-otp-ann@example.com']);
+		expect(rows.map((row) => row.identifier)).toEqual(['sign-in-otp-ann@example.com']);
 	});
 
 	it('refuses a second send within the resend gap, and mails nothing more', async () => {
@@ -338,7 +338,7 @@ describe('OtpError and otpIdentifier', () => {
 	});
 
 	it('lowercases the email in the row identifier', () => {
-		expect(otpIdentifier('A@B.c')).toBe('email-verification-otp-a@b.c');
+		expect(otpIdentifier('A@B.c')).toBe('sign-in-otp-a@b.c');
 	});
 });
 

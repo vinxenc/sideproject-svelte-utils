@@ -1,6 +1,7 @@
 <script lang="ts">
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import * as InputOTP from '#lib/components/ui/input-otp/index.js';
 	import { REGEXP_ONLY_DIGITS } from 'bits-ui';
 	import { authClient } from '#lib/auth-client.js';
@@ -14,6 +15,7 @@
 		describeVerifyError,
 		forgetPending,
 		maskEmail,
+		readHeldPassword,
 		readPending,
 		rememberPending,
 		secondsLeft
@@ -26,6 +28,8 @@
 
 	let email = $state(''); // from sessionStorage, left there by sign-up or an unverified sign-in
 	let loaded = $state(false); // sessionStorage read (client only)
+	let password = $state(''); // held in memory by sign-up / sign-in, or typed in the field after a reload
+	let hasHeldPassword = $state(false); // true → no password field
 	let code = $state(''); // bound to InputOTP.Root
 	let sentAt = $state<number | null>(null);
 	let now = $state(Date.now());
@@ -45,6 +49,8 @@
 		}
 		email = pending.email;
 		sentAt = pending.sentAt;
+		password = readHeldPassword();
+		hasHeldPassword = password !== '';
 		loaded = true;
 		const timer = setInterval(() => (now = Date.now()), 1000);
 		return () => clearInterval(timer);
@@ -52,11 +58,20 @@
 
 	async function verify(value: string): Promise<void> {
 		if (verifying || value.length !== OTP_LENGTH) return;
+		if (password === '') {
+			error = 'Enter your password first.';
+			return;
+		}
 		verifying = true;
 		error = '';
 		notice = '';
 		try {
-			const result = await authClient.emailOtp.verifyEmail({ email, otp: value });
+			// The server hook (EMAIL_VERIFICATION_HOOKS) reads the password from the raw body; the typed client
+			// does not know the field.
+			const result = await authClient.$fetch<{ status: boolean }>('/email-otp/verify-email', {
+				method: 'POST',
+				body: { email, otp: value, password }
+			});
 			if (result.error) {
 				const view = describeVerifyError(result.error);
 				error = view.message;
@@ -123,6 +138,19 @@
 				{/if}
 			</p>
 		</div>
+		{#if loaded && !hasHeldPassword}
+			<Field.Field>
+				<Field.Label for="password-{id}">Password</Field.Label>
+				<Input
+					id="password-{id}"
+					type="password"
+					autocomplete="current-password"
+					required
+					bind:value={password}
+				/>
+				<Field.Description>The password you chose when you signed up.</Field.Description>
+			</Field.Field>
+		{/if}
 		<Field.Field>
 			<Field.Label for="otp-{id}" class="sr-only">Verification code</Field.Label>
 			<InputOTP.Root
@@ -167,6 +195,8 @@
 			</Button>
 			<Field.Description class="text-center">
 				<a href="/sign-in" class="underline underline-offset-4">Back to sign in</a>
+				·
+				<a href="/sign-up" class="underline underline-offset-4">Start over</a>
 			</Field.Description>
 		</Field.Field>
 	</Field.Group>

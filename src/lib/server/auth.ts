@@ -7,7 +7,12 @@ import { BETTER_AUTH_SECRET } from '$app/env/private';
 import { CLIENT_IP_HEADER } from './client-ip.js';
 import { prisma } from './db.js';
 import { EMAIL_OTP_ENGINE } from './email-otp.js';
-import { EMAIL_VERIFICATION, RATE_LIMIT, sendVerificationCode } from './email-verification.js';
+import {
+	EMAIL_VERIFICATION,
+	EMAIL_VERIFICATION_HOOKS,
+	RATE_LIMIT,
+	sendVerificationCode
+} from './email-verification.js';
 import { mailer } from './mail/index.js';
 
 export const auth = betterAuth({
@@ -17,6 +22,7 @@ export const auth = betterAuth({
 	emailAndPassword: { enabled: true, requireEmailVerification: true },
 	emailVerification: EMAIL_VERIFICATION,
 	rateLimit: RATE_LIMIT,
+	hooks: EMAIL_VERIFICATION_HOOKS,
 	// The emailOTP plugin mails the sign-up / unverified-sign-in code by calling its send endpoint with the
 	// browser's request but the init-time context, whose trusted origins are empty while baseURL is unset
 	// (formCsrfMiddleware then refuses the Origin and nothing is mailed). Trust the request's own origin,

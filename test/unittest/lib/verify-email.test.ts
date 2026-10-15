@@ -5,7 +5,9 @@ import {
 	describeResendError,
 	describeVerifyError,
 	forgetPending,
+	holdPassword,
 	maskEmail,
+	readHeldPassword,
 	readPending,
 	rememberPending,
 	secondsLeft
@@ -66,6 +68,27 @@ describe('pending verification storage', () => {
 	});
 });
 
+describe('held password', () => {
+	afterEach(() => holdPassword(''));
+
+	it('is empty until sign-up or sign-in holds one, and forgetPending clears it', () => {
+		expect(readHeldPassword()).toBe('');
+
+		holdPassword('hunter22pw');
+		expect(readHeldPassword()).toBe('hunter22pw');
+
+		forgetPending();
+		expect(readHeldPassword()).toBe('');
+	});
+
+	it('is never written to storage', () => {
+		holdPassword('hunter22pw');
+		rememberPending('ann@example.com', 1000);
+
+		expect(JSON.stringify({ ...sessionStorage })).not.toContain('hunter22pw');
+	});
+});
+
 describe('maskEmail', () => {
 	it.each([
 		['tranlevietduc@gmail.com', 'tr******@gmail.com'],
@@ -101,7 +124,11 @@ describe('secondsLeft', () => {
 describe('describeVerifyError', () => {
 	it.each([
 		[{ status: 429 }, 'Too many tries. Wait a minute, then try again.', false],
-		[{ code: 'INVALID_OTP' }, 'That code is not right. Check the email and try again.', false],
+		[
+			{ code: 'INVALID_OTP' },
+			'That code is not right, or this email was started with a different password. Check the code, or sign up again to start over.',
+			false
+		],
 		[{ code: 'OTP_EXPIRED' }, 'That code has expired. Send a new one.', true],
 		[{ code: 'TOO_MANY_ATTEMPTS' }, 'Too many wrong codes. Send a new one.', true],
 		[{ code: 'EMAIL_ALREADY_VERIFIED' }, 'This email is already verified. Sign in instead.', false],

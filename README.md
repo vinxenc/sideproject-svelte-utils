@@ -147,8 +147,12 @@ The vault at `/passwords` keeps one user's entries: a name, a type (app, credit 
   - The email travels via `sessionStorage`, never the URL. `/verify-email` shows it masked (`tr******@gmail.com`) and has no email field; a tab with nothing pending is sent to `/sign-in`, where an unverified sign-in mails a fresh code.
   - Only `email-otp/verify-email` and `email-otp/send-verification-otp` are open. Every other email-otp route, plus core `/verify-email` and `/send-verification-email`, answers 404.
   - The already-verified guard (`beforeEmailVerification`): a mailbox alone never yields a session for a verified account.
-  - The callback mails only `email-verification` codes, and only to unverified users.
-  - A sign-up with a taken email answers like a new one and mails nothing.
+  - The callback mails only `email-verification` codes, and only to unverified users. The open send route refuses any other `type` (400), because it stores a code row for whatever type it is given.
+  - A sign-up with a taken (verified) email answers like a new one and mails nothing.
+  - **Pre-registration hijack (closed):** someone who signs up first with a victim's email and a password they know must not end up owning the victim's verified account. Two rules, both in `EMAIL_VERIFICATION_HOOKS` (`hooks.before`, `src/lib/server/email-verification.ts`):
+    - **Re-claim:** a sign-up for an email whose account is still unverified deletes that account and creates a new one with the new password and a new code, so squatting an address does not block its owner. An unverified account that has a session row is left alone (only pre-verification-era accounts can have one). Verified accounts are never touched.
+    - **Password proof:** `email-otp/verify-email` also needs the account's password in the body (checked before the code, so a wrong password costs no attempt). A mailbox alone cannot verify, and sign in to, an account whose password someone else chose. Unknown email, missing or wrong password all answer like a wrong code (`INVALID_OTP`) after one hash, so neither the answer nor its timing shows whether an account exists. The `/verify-email` form takes the password from memory (sign-up and sign-in hold it in a module variable, never in storage or the URL) and asks for it after a reload.
+    - Residual: an attacker can keep re-claiming to stop a victim from ever verifying (a nuisance, not a takeover), bounded by the rate limit below. The code is mailed to the victim each time.
   - Existing users were marked verified by the migration.
 - **Rate limits:**
   - Better Auth's built-in limiter, `storage: 'database'` (the `rateLimit` table, shared by every instance).
@@ -171,7 +175,7 @@ The vault at `/passwords` keeps one user's entries: a name, a type (app, credit 
 - Server-only: the consumer owns the routes and UI. No step-up consumer ships yet; the first is the passkey Join in [docs/password-management-plan.md](docs/password-management-plan.md).
 - The plugin's other HTTP endpoints answer 404, as listed under sign-up verification above, because they would let a mailbox alone sign in or reset a password. They still appear in `/api/auth/reference`.
 - Switching provider: change the one line in `src/lib/server/mail/index.ts`. SMTP already covers Resend, SES and Postmark.
-- One code per email: a second consumer needs its own type. Sign-up now uses `email-verification`, so the passkey Join (and any step-up consumer) needs its own type.
+- One code per email and type: `EmailOtp` uses the plugin type `sign-in` (`OTP_TYPE`), which no open route serves (the open send route only takes `email-verification`, and `/sign-in/email-otp` answers 404), so sign-up traffic can neither overwrite nor burn a step-up code. A second step-up consumer still needs a type of its own (or a purpose in the identifier): the plugin has only `sign-in`, `forget-password`, `email-verification` and `change-email`, and a code requested for one flow would satisfy the other.
 
 ## Scripts
 
