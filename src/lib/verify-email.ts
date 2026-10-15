@@ -67,8 +67,8 @@ export function maskEmail(email: string): string {
 }
 
 /** Whole seconds until a resend is allowed, counted from sentAt. */
-export function secondsLeft(sentAt: number, now: number, gap = RESEND_SECONDS): number {
-	return Math.max(0, Math.ceil((sentAt + gap * 1000 - now) / 1000));
+export function secondsLeft(sentAt: number, now: number): number {
+	return Math.max(0, Math.ceil((sentAt + RESEND_SECONDS * 1000 - now) / 1000));
 }
 
 export function describeVerifyError(error: AuthClientError): VerifyErrorView {
@@ -80,7 +80,7 @@ export function describeVerifyError(error: AuthClientError): VerifyErrorView {
 			// Also the answer for a wrong password: the server does not say which one it was.
 			return {
 				message:
-					'That code is not right, or this email was started with a different password. Check the code, or sign up again to start over.',
+					'That code is not right, or this email was started with a different password. Check the code, sign up again to start over, or sign in if you already have an account.',
 				needsNewCode: false
 			};
 		case 'OTP_EXPIRED':
@@ -89,8 +89,6 @@ export function describeVerifyError(error: AuthClientError): VerifyErrorView {
 			return { message: 'Too many wrong codes. Send a new one.', needsNewCode: true };
 		case 'EMAIL_ALREADY_VERIFIED':
 			return { message: 'This email is already verified. Sign in instead.', needsNewCode: false };
-		case 'INVALID_EMAIL':
-			return { message: 'Enter a valid email address.', needsNewCode: false };
 		default:
 			return { message: error.message ?? 'Verification failed. Try again.', needsNewCode: false };
 	}
@@ -100,6 +98,5 @@ export function describeResendError(error: AuthClientError): string {
 	if (error.status === 429) {
 		return 'You asked for too many codes. Wait a minute, then try again.';
 	}
-	if (error.code === 'INVALID_EMAIL') return 'Enter a valid email address.';
 	return error.message ?? 'Could not send a new code. Try again.';
 }

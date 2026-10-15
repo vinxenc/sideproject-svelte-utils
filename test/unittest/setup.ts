@@ -20,9 +20,12 @@ vi.mock('$app/env/private', () => ({
 }));
 
 // Browser APIs jsdom doesn't implement, used by bits-ui/Sidebar, mode-watcher, bind:clientWidth,
-// the gallery's infinite scroll and Svelte transitions.
-window.matchMedia = fakeMatchMedia;
-globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver;
-globalThis.IntersectionObserver =
-	FakeIntersectionObserver as unknown as typeof IntersectionObserver;
-Element.prototype.animate = fakeAnimate;
+// the gallery's infinite scroll and Svelte transitions. A file that opts into `@vitest-environment node`
+// has no window to patch.
+if (typeof window !== 'undefined') {
+	window.matchMedia = fakeMatchMedia;
+	globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver;
+	globalThis.IntersectionObserver =
+		FakeIntersectionObserver as unknown as typeof IntersectionObserver;
+	Element.prototype.animate = fakeAnimate;
+}

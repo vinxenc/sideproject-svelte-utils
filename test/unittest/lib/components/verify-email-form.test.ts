@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/sv
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import VerifyEmailForm from '#lib/components/verify-email-form.svelte';
-import { PENDING_KEY, holdPassword } from '#lib/verify-email.js';
+import { PENDING_KEY, holdPassword, readHeldPassword } from '#lib/verify-email.js';
 import { deferred } from '../../helpers/media.js';
 
 const auth = vi.hoisted(() => ({
@@ -195,6 +195,19 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Resend code' }));
 
 		expect(await screen.findByText('Could not reach the server. Try again.')).toBeTruthy();
+	});
+});
+
+describe('VerifyEmailForm leaving the page', () => {
+	it('forgets the pending email and the held password when it unmounts', async () => {
+		storePending();
+		const { unmount } = render(VerifyEmailForm);
+		await screen.findByText('an******@example.com');
+
+		unmount();
+
+		expect(sessionStorage.getItem(STORED)).toBeNull();
+		expect(readHeldPassword()).toBe('');
 	});
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	EMAIL_VERIFICATION,
 	RATE_LIMIT,
+	ownsData,
 	rejectVerifiedUser,
 	sendVerificationCode
 } from '#lib/server/email-verification.js';
@@ -27,6 +28,28 @@ describe('rejectVerifiedUser', () => {
 
 	it('lets an unverified user through', async () => {
 		await expect(rejectVerifiedUser({ emailVerified: false })).resolves.toBeUndefined();
+	});
+});
+
+describe('ownsData', () => {
+	const delegate = (row: unknown) => ({ findFirst: vi.fn().mockResolvedValue(row) });
+
+	it('is true when any of the user-owned models has a row', async () => {
+		const album = delegate({ id: 'a1' });
+		const owns = ownsData({ password: delegate(null), media: delegate(null), album });
+
+		await expect(owns('u1')).resolves.toBe(true);
+		expect(album.findFirst).toHaveBeenCalledWith({ where: { userId: 'u1' }, select: { id: true } });
+	});
+
+	it('is false when the user owns nothing', async () => {
+		const owns = ownsData({
+			password: delegate(null),
+			media: delegate(null),
+			album: delegate(null)
+		});
+
+		await expect(owns('u1')).resolves.toBe(false);
 	});
 });
 

@@ -1,13 +1,14 @@
-import { TextEncoder as NodeTextEncoder } from 'node:util';
+// @vitest-environment node
 import { betterAuth } from 'better-auth';
 import { memoryAdapter, type MemoryDB } from 'better-auth/adapters/memory';
 import { emailOTP } from 'better-auth/plugins';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EMAIL_OTP_ENGINE } from '#lib/server/email-otp.js';
 import {
 	EMAIL_VERIFICATION,
-	EMAIL_VERIFICATION_HOOKS,
-	sendVerificationCode
+	emailVerificationHooks,
+	sendVerificationCode,
+	type OwnsData
 } from '#lib/server/email-verification.js';
 import { FakeMailer } from '../../helpers/email-otp.js';
 
@@ -18,7 +19,7 @@ const PASSWORD = 'correct horse battery';
  * The real emailOTP plugin, with the options from auth.ts, on Better Auth's in-memory adapter. No rate limit
  * (auth.api server calls skip the router). The only stand-in is the mailer, which records messages.
  */
-function setup() {
+function setup(owns: OwnsData = async () => false) {
 	const memDb: MemoryDB = { user: [], session: [], account: [], verification: [] };
 	const mailer = new FakeMailer();
 	const auth = betterAuth({
@@ -26,7 +27,7 @@ function setup() {
 		database: memoryAdapter(memDb),
 		emailAndPassword: { enabled: true, requireEmailVerification: true },
 		emailVerification: EMAIL_VERIFICATION,
-		hooks: EMAIL_VERIFICATION_HOOKS,
+		hooks: emailVerificationHooks(owns),
 		plugins: [
 			emailOTP({
 				...EMAIL_OTP_ENGINE,
@@ -65,22 +66,6 @@ function verify(auth: TestAuth, otp: string, password: unknown = PASSWORD, email
 		body: { email, otp, password } as { email: string; otp: string }
 	});
 }
-
-/**
- * Better Auth signs its sign-up token with new TextEncoder().encode(secret). Under the jsdom environment the
- * global Uint8Array is not the realm that encoder uses, and jose rejects the key with instanceof. Copying the
- * bytes into the global constructor fixes that. Other tests never reach the signer.
- */
-class RealmTextEncoder {
-	readonly #encoder = new NodeTextEncoder();
-	encode(input: string): Uint8Array {
-		return Uint8Array.from(this.#encoder.encode(input));
-	}
-}
-
-beforeEach(() => {
-	vi.stubGlobal('TextEncoder', RealmTextEncoder);
-});
 
 afterEach(() => {
 	vi.useRealTimers();
@@ -388,6 +373,36 @@ describe('pre-registration hijack', () => {
 
 		await expect(signUp(auth, 'short')).rejects.toMatchObject({ status: 'BAD_REQUEST' });
 
+		expect(memDb.user[0].id).toBe(id);
+	});
+
+	it('does not re-claim an unverified account that owns data, even with no session', async () => {
+		const owns = vi.fn<OwnsData>().mockResolvedValue(true);
+		const { auth, memDb, mailer } = setup(owns);
+		await signUp(auth);
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
+		const id = memDb.user[0].id;
+
+		await signUp(auth, ATTACKER_PASSWORD);
+
+		expect(owns).toHaveBeenCalledWith(id);
+		expect(memDb.user).toHaveLength(1);
+		expect(memDb.user[0].id).toBe(id);
+		expect(mailer.messages).toHaveLength(1);
+	});
+
+	it('deletes nothing when the core would refuse the sign-up (password too long, no name)', async () => {
+		const { auth, memDb, mailer } = setup();
+		await signUp(auth);
+		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
+		const id = memDb.user[0].id;
+
+		await expect(signUp(auth, 'x'.repeat(129))).rejects.toBeDefined();
+		await expect(
+			auth.api.signUpEmail({ body: { email: EMAIL, password: PASSWORD } as never })
+		).rejects.toBeDefined();
+
+		expect(memDb.user).toHaveLength(1);
 		expect(memDb.user[0].id).toBe(id);
 	});
 

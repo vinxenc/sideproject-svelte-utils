@@ -115,10 +115,6 @@ describe('secondsLeft', () => {
 		expect(secondsLeft(0, 60_000)).toBe(0);
 		expect(secondsLeft(0, 90_000)).toBe(0);
 	});
-
-	it('takes a custom gap', () => {
-		expect(secondsLeft(0, 5_000, 10)).toBe(5);
-	});
 });
 
 describe('describeVerifyError', () => {
@@ -126,13 +122,12 @@ describe('describeVerifyError', () => {
 		[{ status: 429 }, 'Too many tries. Wait a minute, then try again.', false],
 		[
 			{ code: 'INVALID_OTP' },
-			'That code is not right, or this email was started with a different password. Check the code, or sign up again to start over.',
+			'That code is not right, or this email was started with a different password. Check the code, sign up again to start over, or sign in if you already have an account.',
 			false
 		],
 		[{ code: 'OTP_EXPIRED' }, 'That code has expired. Send a new one.', true],
 		[{ code: 'TOO_MANY_ATTEMPTS' }, 'Too many wrong codes. Send a new one.', true],
-		[{ code: 'EMAIL_ALREADY_VERIFIED' }, 'This email is already verified. Sign in instead.', false],
-		[{ code: 'INVALID_EMAIL' }, 'Enter a valid email address.', false]
+		[{ code: 'EMAIL_ALREADY_VERIFIED' }, 'This email is already verified. Sign in instead.', false]
 	])('maps %j to its message', (error, message, needsNewCode) => {
 		expect(describeVerifyError(error)).toEqual({ message, needsNewCode });
 	});
@@ -157,10 +152,6 @@ describe('describeResendError', () => {
 		expect(describeResendError({ status: 429 })).toBe(
 			'You asked for too many codes. Wait a minute, then try again.'
 		);
-	});
-
-	it('explains an invalid email', () => {
-		expect(describeResendError({ code: 'INVALID_EMAIL' })).toBe('Enter a valid email address.');
 	});
 
 	it('shows the server message, or a generic one', () => {

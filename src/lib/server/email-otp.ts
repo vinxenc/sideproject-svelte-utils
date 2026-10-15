@@ -21,8 +21,8 @@ export const EMAIL_OTP_ENGINE = {
 const OTP_PATTERN = new RegExp(`^\\d{${OTP_LENGTH}}$`);
 
 /** Mirrors Better Auth's internal toOTPIdentifier: the row identifier for a code. Lowercases the email like the plugin. */
-export function otpIdentifier(email: string): string {
-	return `${OTP_TYPE}-otp-${email.toLowerCase()}`;
+export function otpIdentifier(email: string, type: string = OTP_TYPE): string {
+	return `${type}-otp-${email.toLowerCase()}`;
 }
 
 export type OtpErrorCode = 'TOO_SOON' | 'INVALID' | 'LOCKED';

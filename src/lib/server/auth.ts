@@ -9,8 +9,9 @@ import { prisma } from './db.js';
 import { EMAIL_OTP_ENGINE } from './email-otp.js';
 import {
 	EMAIL_VERIFICATION,
-	EMAIL_VERIFICATION_HOOKS,
 	RATE_LIMIT,
+	emailVerificationHooks,
+	ownsData,
 	sendVerificationCode
 } from './email-verification.js';
 import { mailer } from './mail/index.js';
@@ -22,12 +23,14 @@ export const auth = betterAuth({
 	emailAndPassword: { enabled: true, requireEmailVerification: true },
 	emailVerification: EMAIL_VERIFICATION,
 	rateLimit: RATE_LIMIT,
-	hooks: EMAIL_VERIFICATION_HOOKS,
+	hooks: emailVerificationHooks(ownsData(prisma)),
 	// The emailOTP plugin mails the sign-up / unverified-sign-in code by calling its send endpoint with the
 	// browser's request but the init-time context, whose trusted origins are empty while baseURL is unset
-	// (formCsrfMiddleware then refuses the Origin and nothing is mailed). Trust the request's own origin,
-	// which is what per-request contexts already do through the dynamic base URL.
-	trustedOrigins: (request) => (request ? [new URL(request.url).origin] : []),
+	// (formCsrfMiddleware then refuses the Origin and nothing is mailed). Until BETTER_AUTH_URL is set, trust
+	// the request's own origin; once it is set, its origin is trusted and this special case switches itself off.
+	trustedOrigins: process.env.BETTER_AUTH_URL
+		? []
+		: (request) => (request ? [new URL(request.url).origin] : []),
 	// The client IP comes only from the header the /api/auth route sets from SvelteKit's getClientAddress().
 	advanced: { ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] } },
 	// Access token: the session_data cookie, a 5-minute JWT signed with the private key whose public

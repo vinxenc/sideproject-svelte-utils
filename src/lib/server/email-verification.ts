@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import type { EmailOTPOptions } from 'better-auth/plugins';
+import { otpIdentifier } from './email-otp.js';
 import type { Mailer } from './mail/mailer.js';
 import { verifyEmailMessage } from './mail/messages.js';
 
@@ -50,24 +51,50 @@ function invalidOtp(): APIError {
 type Body = Record<string, unknown>;
 type HookContext = Parameters<Parameters<typeof createAuthMiddleware>[0]>[0];
 
+/** Whether the user owns app data (passwords, media, albums), which a re-claim must never delete. */
+export type OwnsData = (userId: string) => Promise<boolean>;
+
+type Delegate = {
+	findFirst(args: { where: { userId: string }; select: { id: true } }): PromiseLike<unknown>;
+};
+
+/** An OwnsData that asks the Prisma models that hang off the user. */
+export function ownsData(db: Record<'password' | 'media' | 'album', Delegate>): OwnsData {
+	return async (userId) => {
+		const args = { where: { userId }, select: { id: true } } as const;
+		const rows = await Promise.all([
+			db.password.findFirst(args),
+			db.media.findFirst(args),
+			db.album.findFirst(args)
+		]);
+		return rows.some((row) => row !== null);
+	};
+}
+
 /**
  * Re-claim: a sign-up for an email whose account is still unverified replaces that account, so whoever
  * pre-registered a victim's email cannot squat it. The core sign-up then creates the user, hashes the
- * password and mails the new code. A user with a session is left alone (it falls through to the generic
- * duplicate answer): unverified users never get a session on this flow, so only a pre-verification-era
- * account that has been used is protected.
+ * password and mails the new code. An account with a session, or one that owns data, is left alone (it
+ * falls through to the generic duplicate answer): unverified users get neither on this flow, so only a
+ * pre-verification-era account that has been used is protected.
  */
-async function reclaimUnverified(ctx: HookContext, { email, password }: Body): Promise<void> {
+async function reclaimUnverified(
+	ctx: HookContext,
+	{ email, password, name }: Body,
+	owns: OwnsData
+): Promise<void> {
 	const { internalAdapter, password: hasher } = ctx.context;
-	// A sign-up the core would refuse (short password) must not delete anything.
-	if (typeof email !== 'string' || typeof password !== 'string') return;
-	if (password.length < hasher.config.minPasswordLength) return;
+	// A sign-up the core would refuse (password length, missing name) must not delete anything.
+	if (typeof email !== 'string' || typeof password !== 'string' || typeof name !== 'string') return;
+	const { minPasswordLength, maxPasswordLength } = hasher.config;
+	if (password.length < minPasswordLength || password.length > maxPasswordLength) return;
 	const found = await internalAdapter.findUserByEmail(email.toLowerCase());
 	if (!found || found.user.emailVerified) return;
 	if ((await internalAdapter.listSessions(found.user.id)).length > 0) return;
+	if (await owns(found.user.id)) return;
 	await internalAdapter.deleteUser(found.user.id);
 	await internalAdapter.deleteVerificationByIdentifier(
-		`${SIGN_UP_OTP_TYPE}-otp-${found.user.email.toLowerCase()}`
+		otpIdentifier(found.user.email, SIGN_UP_OTP_TYPE)
 	);
 }
 
@@ -99,18 +126,18 @@ async function requirePasswordProof(ctx: HookContext, { email, password }: Body)
 }
 
 /**
- * hooks.before, branching on the route (the body here is raw: the endpoint schemas have not run):
+ * emailVerificationHooks: hooks.before, branching on the route (the body here is raw: the endpoint schemas have not run):
  * - /sign-up/email: re-claim an unverified account.
  * - /email-otp/verify-email: password proof.
  * - /email-otp/send-verification-otp: only the sign-up type. The route stores a code row for any type it is
  *   given, which would overwrite a verified user's step-up code (EmailOtp) even though nothing is mailed.
  */
-export const EMAIL_VERIFICATION_HOOKS = {
+export const emailVerificationHooks = (owns: OwnsData) => ({
 	before: createAuthMiddleware(async (ctx) => {
 		const body = (ctx.body ?? {}) as Body;
 		switch (ctx.path) {
 			case '/sign-up/email':
-				return reclaimUnverified(ctx, body);
+				return reclaimUnverified(ctx, body, owns);
 			case '/email-otp/verify-email':
 				return requirePasswordProof(ctx, body);
 			case '/email-otp/send-verification-otp':
@@ -119,7 +146,7 @@ export const EMAIL_VERIFICATION_HOOKS = {
 				}
 		}
 	})
-};
+});
 
 export const EMAIL_VERIFICATION = {
 	// Unverified sign-in with the right password re-mails a code (sign-in.mjs only sends when this is set).

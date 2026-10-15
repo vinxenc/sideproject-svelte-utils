@@ -53,7 +53,10 @@
 		hasHeldPassword = password !== '';
 		loaded = true;
 		const timer = setInterval(() => (now = Date.now()), 1000);
-		return () => clearInterval(timer);
+		return () => {
+			clearInterval(timer);
+			forgetPending(); // leaving the page ("Back to sign in", "Start over", a successful verify)
+		};
 	});
 
 	async function verify(value: string): Promise<void> {
