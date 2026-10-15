@@ -11,29 +11,36 @@ export const RESEND_SECONDS = 60; // the plugin's send-verification-otp rate-lim
 export const PENDING_KEY = 'utilities:verify-email';
 export const NETWORK_ERROR = 'Could not reach the server. Try again.';
 
+// Fallback for blocked storage (private mode): the same page session keeps the value in memory. Like
+// heldPassword it is set only from browser event handlers, never during SSR.
+let inMemoryPending: PendingVerification | null = null;
+
 /** Keeps the email for the verify page. Storage can be blocked (private mode), so failures are ignored. */
 export function rememberPending(email: string, sentAt: number): void {
+	inMemoryPending = { email, sentAt };
 	try {
 		sessionStorage.setItem(
 			PENDING_KEY,
 			JSON.stringify({ email, sentAt } satisfies PendingVerification)
 		);
 	} catch {
-		// No storage: the verify page shows the email field instead.
+		// No storage: readPending falls back to the in-memory copy.
 	}
 }
 
 /** The pending verification, or null when there is none or it is malformed. */
 export function readPending(): PendingVerification | null {
 	try {
-		const value: unknown = JSON.parse(sessionStorage.getItem(PENDING_KEY) ?? 'null');
+		const raw = sessionStorage.getItem(PENDING_KEY);
+		if (raw === null) return inMemoryPending;
+		const value: unknown = JSON.parse(raw);
 		if (typeof value !== 'object' || value === null) return null;
 		const { email, sentAt } = value as Partial<Record<keyof PendingVerification, unknown>>;
 		if (typeof email !== 'string' || !email.includes('@')) return null;
 		if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) return null;
 		return { email, sentAt };
 	} catch {
-		return null;
+		return inMemoryPending;
 	}
 }
 
@@ -51,6 +58,7 @@ export function readHeldPassword(): string {
 }
 
 export function forgetPending(): void {
+	inMemoryPending = null;
 	heldPassword = '';
 	try {
 		sessionStorage.removeItem(PENDING_KEY);

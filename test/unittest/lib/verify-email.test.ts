@@ -14,8 +14,14 @@ import {
 } from '#lib/verify-email.js';
 
 describe('pending verification storage', () => {
-	beforeEach(() => sessionStorage.clear());
-	afterEach(() => sessionStorage.clear());
+	beforeEach(() => {
+		sessionStorage.clear();
+		forgetPending(); // the in-memory copy outlives sessionStorage.clear()
+	});
+	afterEach(() => {
+		sessionStorage.clear();
+		forgetPending();
+	});
 
 	it('round-trips the email and the send time', () => {
 		rememberPending('ann@example.com', 1000);
@@ -54,7 +60,19 @@ describe('pending verification storage', () => {
 		expect(readPending()).toBeNull();
 	});
 
-	it('neither throws nor finds anything when storage is blocked', () => {
+	it('keeps the pending verification in memory when a write is refused but a read returns nothing', () => {
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new DOMException('quota', 'QuotaExceededError');
+		});
+
+		rememberPending('a@b.c', 1);
+
+		expect(readPending()).toEqual({ email: 'a@b.c', sentAt: 1 });
+		forgetPending();
+		expect(readPending()).toBeNull();
+	});
+
+	it('does not throw and falls back to memory when storage is blocked', () => {
 		const denied = () => {
 			throw new DOMException('denied', 'SecurityError');
 		};
@@ -63,7 +81,7 @@ describe('pending verification storage', () => {
 		vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(denied);
 
 		expect(() => rememberPending('a@b.c', 1)).not.toThrow();
-		expect(readPending()).toBeNull();
+		expect(readPending()).toEqual({ email: 'a@b.c', sentAt: 1 });
 		expect(() => forgetPending()).not.toThrow();
 	});
 });
