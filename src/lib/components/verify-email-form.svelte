@@ -1,7 +1,6 @@
 <script lang="ts">
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
 	import * as InputOTP from '#lib/components/ui/input-otp/index.js';
 	import { REGEXP_ONLY_DIGITS } from 'bits-ui';
 	import { authClient } from '#lib/auth-client.js';
@@ -25,9 +24,8 @@
 
 	const id = $props.id();
 
-	let email = $state(''); // from sessionStorage, or typed in the fallback field
-	let hasStoredEmail = $state(false); // true → show masked email, hide the email field
-	let loaded = $state(false); // sessionStorage read (client only); avoids an SSR flash of the fallback field
+	let email = $state(''); // from sessionStorage, left there by sign-up or an unverified sign-in
+	let loaded = $state(false); // sessionStorage read (client only)
 	let code = $state(''); // bound to InputOTP.Root
 	let sentAt = $state<number | null>(null);
 	let now = $state(Date.now());
@@ -40,11 +38,13 @@
 
 	onMount(() => {
 		const pending = readPending();
-		if (pending) {
-			email = pending.email;
-			sentAt = pending.sentAt;
-			hasStoredEmail = true;
+		if (!pending) {
+			// Nothing to verify in this tab: sign-in sends a fresh code to an unverified account.
+			void goto('/sign-in');
+			return;
 		}
+		email = pending.email;
+		sentAt = pending.sentAt;
 		loaded = true;
 		const timer = setInterval(() => (now = Date.now()), 1000);
 		return () => clearInterval(timer);
@@ -52,15 +52,11 @@
 
 	async function verify(value: string): Promise<void> {
 		if (verifying || value.length !== OTP_LENGTH) return;
-		if (email.trim() === '') {
-			error = 'Enter your email first.';
-			return;
-		}
 		verifying = true;
 		error = '';
 		notice = '';
 		try {
-			const result = await authClient.emailOtp.verifyEmail({ email: email.trim(), otp: value });
+			const result = await authClient.emailOtp.verifyEmail({ email, otp: value });
 			if (result.error) {
 				const view = describeVerifyError(result.error);
 				error = view.message;
@@ -81,16 +77,12 @@
 
 	async function resend(): Promise<void> {
 		if (resending || wait > 0) return;
-		if (email.trim() === '') {
-			error = 'Enter your email first.';
-			return;
-		}
 		resending = true;
 		error = '';
 		notice = '';
 		try {
 			const result = await authClient.emailOtp.sendVerificationOtp({
-				email: email.trim(),
+				email,
 				type: 'email-verification'
 			});
 			if (result.error) {
@@ -100,7 +92,7 @@
 			}
 			sentAt = Date.now();
 			now = sentAt;
-			rememberPending(email.trim(), sentAt);
+			rememberPending(email, sentAt);
 			needsNewCode = false;
 			code = '';
 			notice = 'A new code is on its way.';
@@ -124,28 +116,13 @@
 			<p class="min-h-5 text-sm text-balance text-muted-foreground">
 				{#if !loaded}
 					&nbsp;
-				{:else if hasStoredEmail}
+				{:else}
 					We sent a 6-digit code to <span class="font-medium text-foreground"
 						>{maskEmail(email)}</span
 					>.
-				{:else}
-					Enter your email and the 6-digit code we sent you.
 				{/if}
 			</p>
 		</div>
-		{#if loaded && !hasStoredEmail}
-			<Field.Field>
-				<Field.Label for="email-{id}">Email</Field.Label>
-				<Input
-					id="email-{id}"
-					type="email"
-					placeholder="m@example.com"
-					autocomplete="email"
-					required
-					bind:value={email}
-				/>
-			</Field.Field>
-		{/if}
 		<Field.Field>
 			<Field.Label for="otp-{id}" class="sr-only">Verification code</Field.Label>
 			<InputOTP.Root

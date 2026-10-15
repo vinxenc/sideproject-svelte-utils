@@ -68,8 +68,10 @@ describe('pending verification storage', () => {
 
 describe('maskEmail', () => {
 	it.each([
-		['ann@example.com', 'a•••@example.com'],
-		['a@x.io', 'a•••@x.io'],
+		['tranlevietduc@gmail.com', 'tr******@gmail.com'],
+		['ann@example.com', 'an******@example.com'],
+		['an@x.io', 'a******@x.io'],
+		['a@x.io', 'a******@x.io'],
 		['noat', 'noat'],
 		['@x.io', '@x.io']
 	])('masks %s as %s', (email, masked) => {

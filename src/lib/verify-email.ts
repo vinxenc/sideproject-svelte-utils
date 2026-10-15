@@ -45,11 +45,11 @@ export function forgetPending(): void {
 	}
 }
 
-/** 'ann@example.com' → 'a•••@example.com'. Anything without a local part and '@' is returned unchanged. */
+/** 'tranlevietduc@gmail.com' → 'tr******@gmail.com'. A fixed six stars hide the length of the local part. Anything without a local part and '@' is returned unchanged. */
 export function maskEmail(email: string): string {
 	const at = email.indexOf('@');
 	if (at < 1) return email;
-	return `${email[0]}•••${email.slice(at)}`;
+	return `${email.slice(0, at > 2 ? 2 : 1)}******${email.slice(at)}`;
 }
 
 /** Whole seconds until a resend is allowed, counted from sentAt. */

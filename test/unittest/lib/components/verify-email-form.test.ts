@@ -43,7 +43,7 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 
 		render(VerifyEmailForm);
 
-		expect(screen.getByText('a•••@example.com')).toBeTruthy();
+		expect(screen.getByText('an******@example.com')).toBeTruthy();
 		expect(screen.queryByLabelText('Email')).toBeNull();
 		const resend = screen.getByRole('button', { name: 'Resend code in 60s' }) as HTMLButtonElement;
 		expect(resend.disabled).toBe(true);
@@ -196,50 +196,12 @@ describe('VerifyEmailForm with a stored pending verification', () => {
 	});
 });
 
-describe('VerifyEmailForm without a stored pending verification (fallback)', () => {
-	it('shows the email field, and Resend is enabled straight away', async () => {
+describe('VerifyEmailForm without a stored pending verification', () => {
+	it('sends the user to /sign-in and never asks for an email', async () => {
 		render(VerifyEmailForm);
 
-		expect(await screen.findByLabelText('Email')).toBeTruthy();
-		expect(
-			(screen.getByRole('button', { name: 'Resend code' }) as HTMLButtonElement).disabled
-		).toBe(false);
-	});
-
-	it('asks for the email when the code is entered without one', async () => {
-		render(VerifyEmailForm);
-		await screen.findByLabelText('Email');
-
-		await typeCode('123456');
-
-		expect(await screen.findByText('Enter your email first.')).toBeTruthy();
-		expect(auth.emailOtp.verifyEmail).not.toHaveBeenCalled();
-	});
-
-	it('asks for the email on Resend without one, and makes no request', async () => {
-		render(VerifyEmailForm);
-		await screen.findByLabelText('Email');
-
-		await fireEvent.click(screen.getByRole('button', { name: 'Resend code' }));
-
-		expect(await screen.findByText('Enter your email first.')).toBeTruthy();
-		expect(auth.emailOtp.sendVerificationOtp).not.toHaveBeenCalled();
-	});
-
-	it('stores the typed email when Resend succeeds', async () => {
-		auth.emailOtp.sendVerificationOtp.mockResolvedValue({ data: { success: true }, error: null });
-		render(VerifyEmailForm);
-		const field = await screen.findByLabelText('Email');
-		await fireEvent.input(field, { target: { value: '  ann@example.com ' } });
-
-		await fireEvent.click(screen.getByRole('button', { name: 'Resend code' }));
-
-		expect(await screen.findByText('A new code is on its way.')).toBeTruthy();
-		expect(auth.emailOtp.sendVerificationOtp).toHaveBeenCalledWith({
-			email: 'ann@example.com',
-			type: 'email-verification'
-		});
-		expect(JSON.parse(sessionStorage.getItem(STORED) ?? 'null').email).toBe('ann@example.com');
+		await waitFor(() => expect(nav.goto).toHaveBeenCalledWith('/sign-in'));
+		expect(screen.queryByLabelText('Email')).toBeNull();
 	});
 });
 

@@ -144,7 +144,7 @@ The vault at `/passwords` keeps one user's entries: a name, a type (app, credit 
 - **Sign-up verification (plugin-native consumer):**
   - Flow: sign-up → no session → code mailed → `/verify-email` → `email-otp/verify-email` verifies and signs in.
   - An unverified sign-in returns 403 and re-mails a code.
-  - The email travels via `sessionStorage`, never the URL.
+  - The email travels via `sessionStorage`, never the URL. `/verify-email` shows it masked (`tr******@gmail.com`) and has no email field; a tab with nothing pending is sent to `/sign-in`, where an unverified sign-in mails a fresh code.
   - Only `email-otp/verify-email` and `email-otp/send-verification-otp` are open. Every other email-otp route, plus core `/verify-email` and `/send-verification-email`, answers 404.
   - The already-verified guard (`beforeEmailVerification`): a mailbox alone never yields a session for a verified account.
   - The callback mails only `email-verification` codes, and only to unverified users.
