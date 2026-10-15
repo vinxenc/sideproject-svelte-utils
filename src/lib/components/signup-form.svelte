@@ -5,6 +5,7 @@
 	import { authClient } from '#lib/auth-client.js';
 	import { goto } from '$app/navigation';
 	import { cn } from '#lib/utils.js';
+	import { rememberPending } from '#lib/verify-email.js';
 	import type { HTMLAttributes } from 'svelte/elements';
 
 	let { class: className, ...restProps }: HTMLAttributes<HTMLFormElement> = $props();
@@ -32,7 +33,8 @@
 				error = result.error.message ?? 'Sign up failed';
 				return;
 			}
-			await goto('/dashboard', { invalidateAll: true });
+			rememberPending(email.trim(), Date.now());
+			await goto('/verify-email');
 		} catch {
 			error = 'Could not reach the server. Try again.';
 		} finally {

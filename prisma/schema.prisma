@@ -85,6 +85,16 @@ model Jwks {
   @@map("jwks")
 }
 
+// Better Auth's rate limiter (rateLimit.storage = 'database'): one row per "<client ip>|<path>".
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
+}
+
 enum MediaKind {
   IMAGE
   VIDEO

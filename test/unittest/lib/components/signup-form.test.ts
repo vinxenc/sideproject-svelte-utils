@@ -10,6 +10,7 @@ vi.mock('$app/navigation', () => nav);
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	sessionStorage.clear();
 });
 
 afterEach(cleanup);
@@ -37,7 +38,7 @@ describe('SignupForm', () => {
 		expect(auth.signUp.email).not.toHaveBeenCalled();
 	});
 
-	it('creates the account and goes to the dashboard', async () => {
+	it('creates the account, keeps the email for the verify page and goes to /verify-email', async () => {
 		auth.signUp.email.mockResolvedValue({ error: null });
 		render(SignupForm);
 
@@ -48,9 +49,10 @@ describe('SignupForm', () => {
 			email: 'ann@example.com',
 			password: 'hunter22'
 		});
-		await waitFor(() =>
-			expect(nav.goto).toHaveBeenCalledWith('/dashboard', { invalidateAll: true })
-		);
+		await waitFor(() => expect(nav.goto).toHaveBeenCalledWith('/verify-email'));
+		const stored = JSON.parse(sessionStorage.getItem('utilities:verify-email') ?? 'null');
+		expect(stored.email).toBe('ann@example.com');
+		expect(typeof stored.sentAt).toBe('number');
 	});
 
 	it('shows the server message when sign-up is refused', async () => {

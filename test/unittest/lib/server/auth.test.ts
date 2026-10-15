@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { sveltekitCookies } from 'better-auth/svelte-kit';
+import { CLIENT_IP_HEADER } from '#lib/server/client-ip.js';
+import { EMAIL_VERIFICATION, RATE_LIMIT } from '#lib/server/email-verification.js';
 
 vi.mock('$app/server', () => ({ getRequestEvent: vi.fn() }));
 vi.mock('#lib/server/db.js', () => ({ prisma: {} }));
@@ -48,16 +50,30 @@ describe('auth', () => {
 		});
 	});
 
-	it('never mails through the plugin: its send callback rejects', async () => {
+	it('overrides the default sign-up verification with the plugin and its real mail callback', async () => {
 		const { auth } = await import('#lib/server/auth.js');
 		const plugin = (auth.options.plugins ?? []).find((p) => p.id === 'email-otp');
 
-		await expect(
-			plugin?.options.sendVerificationOTP({
-				email: 'a@b.c',
-				otp: '123456',
-				type: 'email-verification'
-			})
-		).rejects.toThrow('EmailOtp mails the code, not the plugin');
+		expect(plugin?.options.overrideDefaultEmailVerification).toBe(true);
+		expect(plugin?.options.sendVerificationOTP).toBeTypeOf('function');
+	});
+
+	it('requires email verification at sign-up, with the verification, rate-limit and client-IP options', async () => {
+		const { auth } = await import('#lib/server/auth.js');
+
+		expect(auth.options.emailAndPassword?.requireEmailVerification).toBe(true);
+		expect(auth.options.emailVerification).toEqual(EMAIL_VERIFICATION);
+		expect(auth.options.rateLimit).toEqual(RATE_LIMIT);
+		expect(auth.options.advanced?.ipAddress?.ipAddressHeaders).toEqual([CLIENT_IP_HEADER]);
+	});
+
+	it('trusts the origin of the request itself, so the plugin mail send passes the origin check', async () => {
+		const { auth } = await import('#lib/server/auth.js');
+		const trustedOrigins = auth.options.trustedOrigins as (request?: Request) => string[];
+
+		expect(trustedOrigins(new Request('http://localhost:4173/api/auth/sign-up/email'))).toEqual([
+			'http://localhost:4173'
+		]);
+		expect(trustedOrigins()).toEqual([]);
 	});
 });

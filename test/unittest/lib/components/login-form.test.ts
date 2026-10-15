@@ -10,6 +10,7 @@ vi.mock('$app/navigation', () => nav);
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	sessionStorage.clear();
 });
 
 afterEach(cleanup);
@@ -76,6 +77,34 @@ describe('LoginForm', () => {
 
 		reply.resolve({ error: null });
 		await waitFor(() => expect(screen.getByRole('button', { name: 'Login' })).toBeTruthy());
+	});
+
+	it('sends an unverified user to /verify-email, keeping the email, with no error shown', async () => {
+		auth.signIn.email.mockResolvedValue({
+			error: { status: 403, code: 'EMAIL_NOT_VERIFIED', message: 'Email not verified' }
+		});
+		render(LoginForm);
+
+		await fireEvent.submit(await fill());
+
+		await waitFor(() => expect(nav.goto).toHaveBeenCalledWith('/verify-email'));
+		expect(screen.queryByText('Email not verified')).toBeNull();
+		const stored = JSON.parse(sessionStorage.getItem('utilities:verify-email') ?? 'null');
+		expect(stored.email).toBe('ann@example.com');
+		expect(typeof stored.sentAt).toBe('number');
+	});
+
+	it('shows the message for another 403 and stays put', async () => {
+		auth.signIn.email.mockResolvedValue({
+			error: { status: 403, code: 'ACCOUNT_LOCKED', message: 'Account locked' }
+		});
+		render(LoginForm);
+
+		await fireEvent.submit(await fill());
+
+		expect(await screen.findByText('Account locked')).toBeTruthy();
+		expect(nav.goto).not.toHaveBeenCalled();
+		expect(sessionStorage.getItem('utilities:verify-email')).toBeNull();
 	});
 
 	it('merges its class onto the form and passes other attributes through', () => {

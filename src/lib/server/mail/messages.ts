@@ -11,3 +11,12 @@ export function otpMessage(to: string, code: string): MailMessage {
 		text: `Your verification code is ${code}.\n\nIt expires in ${OTP_EXPIRES_SECONDS / 60} minutes. If you did not ask for it, ignore this email.`
 	};
 }
+
+/** The sign-up verification code email (sent by the emailOTP plugin). The code is never in the subject. */
+export function verifyEmailMessage(to: string, code: string): MailMessage {
+	return {
+		to,
+		subject: 'Verify your email',
+		text: `Your code to verify your email is ${code}.\n\nIt expires in ${OTP_EXPIRES_SECONDS / 60} minutes. If you did not ask for it, ignore this email.`
+	};
+}
