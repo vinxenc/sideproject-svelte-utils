@@ -20,6 +20,18 @@ services:
       timeout: 5s
       retries: 15
 
+  # Catches outgoing mail locally (nothing is delivered). SMTP on :1025, web UI on :8025.
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    ports:
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
   # S3-compatible object storage for photos and videos. API on :9000, web console on :9001.
   rustfs:
     image: rustfs/rustfs:1.0.1

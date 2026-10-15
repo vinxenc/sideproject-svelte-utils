@@ -14,7 +14,9 @@ vi.mock('$app/env/private', () => ({
 	S3_REGION: 'us-east-1',
 	S3_BUCKET: 'media',
 	S3_ACCESS_KEY_ID: 'test-key',
-	S3_SECRET_ACCESS_KEY: 'test-secret-key'
+	S3_SECRET_ACCESS_KEY: 'test-secret-key',
+	SMTP_URL: 'smtp://mail.test:1025',
+	MAIL_FROM: 'Utilities <no-reply@test>'
 }));
 
 // Browser APIs jsdom doesn't implement, used by bits-ui/Sidebar, mode-watcher, bind:clientWidth,

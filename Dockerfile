@@ -9,7 +9,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile --offline
 # Placeholder values so the build can validate env var presence; real ones are supplied at runtime.
 RUN DATABASE_URL=build S3_ENDPOINT=build S3_REGION=build S3_BUCKET=build \
-    S3_ACCESS_KEY_ID=build S3_SECRET_ACCESS_KEY=build BETTER_AUTH_SECRET=build \
+    S3_ACCESS_KEY_ID=build S3_SECRET_ACCESS_KEY=build BETTER_AUTH_SECRET=build SMTP_URL=build MAIL_FROM=build \
     pnpm build
 
 # adapter-node bundles every dependency, so the runtime image needs no node_modules.

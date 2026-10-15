@@ -20,6 +20,8 @@ env:
   S3_BUCKET: media
   S3_ACCESS_KEY_ID: ci
   S3_SECRET_ACCESS_KEY: ci
+  SMTP_URL: smtp://localhost:1025
+  MAIL_FROM: 'Utilities <no-reply@localhost>'
 
 jobs:
   install:
