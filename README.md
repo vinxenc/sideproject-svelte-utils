@@ -10,7 +10,8 @@ An installable Progressive Web App (PWA) for web, mobile and desktop, built with
 | UI        | [shadcn-svelte](https://shadcn-svelte.com) (style `nova`, base color `neutral`), [Bits UI](https://bits-ui.com), [Lucide](https://lucide.dev) icons, [mode-watcher](https://mode-watcher.svecosystem.com) for dark/light mode |
 | Styling   | [Tailwind CSS v4](https://tailwindcss.com) via `@tailwindcss/vite`, Inter font                                                                                                                                                |
 | PWA       | SvelteKit built-in service worker + static web manifest, icons from `@vite-pwa/assets-generator`                                                                                                                              |
-| Auth / DB | [Better Auth](https://www.better-auth.com) (email + password) → [Prisma 7](https://www.prisma.io/docs) + `@prisma/adapter-pg` → PostgreSQL 18 (local: Docker, `docker-compose.yml`)                                           |
+| Auth / DB | [Better Auth](https://www.better-auth.com) (email + password, email OTP engine) → [Prisma 7](https://www.prisma.io/docs) + `@prisma/adapter-pg` → PostgreSQL 18 (local: Docker, `docker-compose.yml`)                         |
+| Mail      | Plain-text mail through a `Mailer` adapter (`src/lib/server/mail/`), SMTP via [Nodemailer](https://nodemailer.com); local: [Mailpit](https://mailpit.axllent.org)                                                             |
 | Hosting   | Not chosen yet; local only (`pnpm dev`, `pnpm preview`)                                                                                                                                                                       |
 | Tooling   | pnpm, Vite 8, Vitest, ESLint, Prettier, svelte-check, [Lefthook](https://lefthook.dev) (git hooks)                                                                                                                            |
 
@@ -42,7 +43,9 @@ src/
     +page.server.ts        "/" redirects to /dashboard
     (app)/                 requires a session, else redirects to /sign-in
       dashboard/           landing page after sign-in/sign-up (sidebar-13 layout, full page)
+      passwords/           password vault: list, search, add, reveal, delete (see "Passwords" below)
     api/auth/[...all]/     Better Auth REST API (sign-in, sign-up, get-session, …)
+    api/passwords/         POST /api/passwords, DELETE /api/passwords/[id], POST /api/passwords/[id]/reveal (no-store)
     (guest)/               redirects signed-in users to /dashboard
       sign-in/  sign-up/   auth pages (shadcn blocks login-02, signup-02)
   env.ts                   env var definitions (read via $app/env/private)
@@ -52,17 +55,21 @@ src/
       auth.ts              "auth service": Better Auth + Prisma; access token = 5-min JWT cookie signed with a key pair (jwt plugin), refresh token = session cookie
       session.ts           "app" side: verifies the access token with the public keys from /api/auth/jwks, refreshes via /api/auth/get-session
       prisma/              generated Prisma client (gitignored, `pnpm db:generate`)
+      mail/                `Mailer` adapter: `mailer.ts` (interface), `smtp-mailer.ts` (nodemailer), `messages.ts` (plain-text bodies), `index.ts` (picks the provider)
+      email-otp.ts         `EmailOtp`: send/verify a one-time code to the session user's email (Better Auth `emailOTP` plugin as engine)
     auth-client.ts         Better Auth Svelte client (authClient.signIn / useSession / …)
+    passwords/             shared password types and checks, avatar colours, search and tab-strip helpers, client API
     components/
       ui/                  shadcn-svelte components (generated, managed by the CLI)
       site-header.svelte   dark/light toggle (top-right); logo bar only in the desktop app title bar
       login-form.svelte    sign-in form
       signup-form.svelte   sign-up form
+      passwords/           password vault components (row, reveal, add and detail sheets)
     utils.ts               cn() + shadcn helper types
   service-worker/          offline caching (own tsconfig, WebWorker types)
 prisma/schema.prisma       Better Auth models (user, session, account, verification, jwks)
 prisma/migrations/         SQL migrations (prisma migrate dev)
-docker-compose.yml         local Postgres 18 for development
+docker-compose.yml         local Postgres 18, RustFS and Mailpit
 prisma.config.ts           Prisma CLI config: loads .env (dotenv), DATABASE_URL from the environment
 static/                    manifest.webmanifest, icons, robots.txt
 test/unittest/             Vitest tests, same folder layout as src/ (plus setup.ts and helpers/); pnpm test, pnpm test:cov
@@ -87,12 +94,14 @@ Requirements: Node 22.17+, pnpm 9+ and Docker (for the local Postgres).
 ```sh
 pnpm install                  # also generates the Prisma client
 cp .env.example .env          # ready to use as is, see "Local .env" below
-docker compose up -d --wait   # Postgres on :5432, RustFS (S3) on :9000, console on :9001
+docker compose up -d --wait   # Postgres on :5432, RustFS (S3) on :9000, console on :9001, Mailpit SMTP on :1025, mail UI on :8025
 pnpm db:migrate               # apply migrations
 pnpm dev                      # dev server at http://localhost:5173
 ```
 
-`docker compose down` stops Postgres and RustFS and keeps their data; `docker compose down -v` also wipes it.
+`docker compose down` stops Postgres, RustFS and Mailpit and keeps their data; `docker compose down -v` also wipes it.
+
+Mail the app sends locally shows up at http://localhost:8025 (Mailpit); nothing is delivered. A `.env` made before mail was added lacks `SMTP_URL` and `MAIL_FROM`: re-run `cp .env.example .env`.
 
 ### Local .env
 
@@ -116,6 +125,26 @@ pnpm preview        # http://localhost:4173
 ```
 
 Then open it in Chrome or Edge and use the install icon in the address bar to install it as a desktop app. `localhost` counts as a secure origin, so installation works locally.
+
+## Passwords
+
+The vault at `/passwords` keeps one user's entries: a name, a type (app, credit card, API key or PIN platform), an optional username or email, and a password.
+
+- **Phase 1 stores passwords as plain text** in the `password` table, so anyone with database access can read them. This is an interim state.
+- The list and page data never include a password. Reveal is a `POST /api/passwords/:id/reveal` answered with `Cache-Control: private, no-store`, and the service worker never caches it.
+- Phase 2 (encryption and passkeys) is planned in [docs/password-management-plan.md](docs/password-management-plan.md).
+
+## Email OTP
+
+- A step-up check for a signed-in user: a 6-digit code to the session user's email, valid 10 minutes, 5 wrong tries (the next attempt locks the code), stored hashed.
+- **The 60-second resend gap holds only while a code exists.** A second send within 60 seconds is refused with `TOO_SOON`, but a lockout, a successful verify or an expiry ends the code, so the next send is immediate.
+- **The 5-try cap holds for one server instance only.** `verify` calls for the same email run one at a time inside the process, so parallel guesses cannot all read the same counter. Across several instances the cap does not hold: each instance counts its own tries. A consumer that runs on more than one instance needs a shared rate limit or a database-side counter before it ships. This is a prerequisite for the consumer, not something this building block provides.
+- **Hard prerequisite for the consumer: its send and verify routes must apply a per-user rate limit, shared across instances.** `EmailOtp`'s own resend gap and attempt cap are per code and per process, so a lockout or a new send starts a fresh counter. This building block does not provide that limit; the consumer must add it.
+- Mail: `EmailOtp` mails the code itself through the `Mailer`, and deletes the row it created if the mail fails. The plugin's own mail callback throws, so nothing mails through the plugin.
+- Server-only: the consumer owns the routes and UI. No consumer ships yet; the first is the passkey Join in [docs/password-management-plan.md](docs/password-management-plan.md).
+- The plugin's HTTP endpoints (`/api/auth/email-otp/*`, `/api/auth/sign-in/email-otp`, `/api/auth/forget-password/email-otp`) answer 404 on purpose, because they would let a mailbox alone sign in or reset a password. They still appear in `/api/auth/reference`.
+- Switching provider: change the one line in `src/lib/server/mail/index.ts`. SMTP already covers Resend, SES and Postmark.
+- One code per email: a second consumer needs its own type.
 
 ## Scripts
 
@@ -173,7 +202,7 @@ These clients can't use the browser cookies, so they send tokens in the `Authori
 
 ## Deploy
 
-Hosting isn't chosen yet. The app uses `@sveltejs/adapter-node` (set in `vite.config.ts`) and ships as a Docker image (`docker build -t utilities .`, then `docker run --env-file .env -p 3000:3000 utilities`; in that `.env`, replace `localhost` in `DATABASE_URL` and `S3_ENDPOINT` with addresses the container can reach, e.g. `host.docker.internal`). Point `DATABASE_URL` at a hosted Postgres.
+Hosting isn't chosen yet. The app uses `@sveltejs/adapter-node` (set in `vite.config.ts`) and ships as a Docker image (`docker build -t utilities .`, then `docker run --env-file .env -p 3000:3000 utilities`; in that `.env`, replace `localhost` in `DATABASE_URL`, `S3_ENDPOINT` and `SMTP_URL` with addresses the container can reach, e.g. `host.docker.internal`). Point `DATABASE_URL` at a hosted Postgres.
 
 CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install → lint (`pnpm check`, `pnpm lint`) → unit tests with the 90% coverage gate (`pnpm test:cov`) → Docker build → Trivy scan (fails on fixable HIGH/CRITICAL).
 
@@ -181,6 +210,7 @@ CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install 
 
 - **Secrets & URLs:** set a strong `BETTER_AUTH_SECRET` (`openssl rand -base64 32`; never the local-dev value from `.env.example`) in the host's secret store, and set `baseURL` in `auth.ts` (or a `BETTER_AUTH_URL` env var) to the public origin so callbacks and the JWT issuer don't depend on the request's `Host` header.
 - **Database:** a hosted Postgres, with `DATABASE_URL` in the host's secret store (and `?sslmode=require` if the provider needs TLS). Apply migrations with `prisma migrate deploy` as a CI step before each release; `prisma.config.ts` picks up `DATABASE_URL` from the environment.
+- **Mail:** set `SMTP_URL` (smtps:// with the provider's credentials) and `MAIL_FROM` (a domain with SPF/DKIM) in the host's secret store.
 - **HTTPS only:** required for `__Secure-` cookies, and a leaked token is usable immediately.
 - **Key rotation:** set `jwt({ jwks: { rotationInterval, gracePeriod } })`. `src/lib/server/session.ts` caches the JWKS until restart, so make it refetch when it sees an unknown `kid` (or use `jose`'s `createRemoteJWKSet`, which does this) before turning rotation on.
 - **Revocation lag:** a revoked session's access token stays valid until it expires (5 min). Shorten `session.cookieCache.maxAge` if that matters.
