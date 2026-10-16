@@ -41,6 +41,9 @@
 	let contentRef: HTMLElement | null = $state(null);
 	let confirmOpen = $state(false);
 	let deleting = $state(false);
+	// The ⋯ menu closes on an outside tap only when that tap's click reaches the document. A tap on the native
+	// controls of a <video> can swallow it, so the menu stayed open; while it is open the video is click-through.
+	let menuOpen = $state(false);
 
 	const index = $derived(openId === null ? -1 : items.findIndex((i) => i.id === openId));
 	const item = $derived(items[index]);
@@ -124,7 +127,7 @@
 				<ArrowLeftIcon />
 			</Button>
 			{#if item && (onaddtoalbum || onremovefromalbum || ondelete)}
-				<DropdownMenu.Root>
+				<DropdownMenu.Root bind:open={menuOpen}>
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
 							<Button {...props} variant="ghost" size="icon-lg" aria-label="More options">
@@ -186,6 +189,7 @@
 						<!-- svelte-ignore a11y_media_has_caption -->
 						<video
 							class="absolute inset-0 size-full object-contain"
+							class:pointer-events-none={menuOpen}
 							controls
 							playsinline
 							preload="metadata"

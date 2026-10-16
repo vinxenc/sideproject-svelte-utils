@@ -283,6 +283,29 @@ describe('MediaLightbox album menu', () => {
 		expect(onaddtoalbum).toHaveBeenCalledWith('b');
 	});
 
+	it('lets taps through a playing video while the menu is open, so an outside tap can close it', async () => {
+		render(MediaLightbox, {
+			items: three,
+			openId: 'b',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			onaddtoalbum: vi.fn()
+		} as never);
+		const video = document.querySelector('video') as HTMLVideoElement;
+		expect(video.classList.contains('pointer-events-none')).toBe(false);
+
+		await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		await screen.findByRole('menu');
+		expect(video.classList.contains('pointer-events-none')).toBe(true);
+
+		await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+		await waitFor(() => expect(video.classList.contains('pointer-events-none')).toBe(false));
+	});
+
 	it('offers Remove from album only when it is given', async () => {
 		const onremovefromalbum = vi.fn();
 		render(MediaLightbox, {
