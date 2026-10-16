@@ -79,11 +79,11 @@ export async function listAlbums(
 			userId,
 			...(cursor
 				? {
-						OR: [{ updatedAt: { lt: cursor.at } }, { updatedAt: cursor.at, id: { lt: cursor.id } }]
+						OR: [{ createdAt: { lt: cursor.at } }, { createdAt: cursor.at, id: { lt: cursor.id } }]
 					}
 				: {})
 		},
-		orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+		orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 		take: limit + 1,
 		select: summarySelect
 	});
@@ -91,7 +91,7 @@ export async function listAlbums(
 	const last = items.at(-1);
 	return {
 		items: items.map(toSummary),
-		nextCursor: rows.length > limit && last ? encodeCursor(last.updatedAt, last.id) : null
+		nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null
 	};
 }
 
@@ -111,7 +111,7 @@ export async function createAlbum(userId: string, name: string): Promise<AlbumSu
 	return toSummary(row);
 }
 
-/** Renames the album and bumps updatedAt, so it moves to the front of the list. null when not found / not owned. */
+/** Renames the album; updatedAt is stamped by Prisma. null when not found / not owned. */
 export async function renameAlbum(
 	userId: string,
 	id: string,
@@ -119,7 +119,7 @@ export async function renameAlbum(
 ): Promise<AlbumSummary | null> {
 	const { count } = await prisma.album.updateMany({
 		where: { id, userId },
-		data: { name, updatedAt: new Date() }
+		data: { name }
 	});
 	if (count === 0) return null;
 	return getAlbumSummary(userId, id);
@@ -173,7 +173,7 @@ export function addItems(
 			data: mediaIds.map((mediaId) => ({ albumId, mediaId })),
 			skipDuplicates: true
 		});
-		// Explicit, because a no-op re-add must not reorder the album list.
+		// Only when something was added: a no-op re-add must not change the album's "last changed" date.
 		if (count > 0)
 			await tx.album.update({ where: { id: albumId }, data: { updatedAt: new Date() } });
 		return count;

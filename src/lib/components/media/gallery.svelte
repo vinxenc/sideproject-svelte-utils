@@ -13,7 +13,7 @@
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { deleteMedia } from '#lib/media/api.js';
+	import { deleteMedia, deleteMediaItems } from '#lib/media/api.js';
 	import type { MediaItem, MediaPage } from '#lib/media/types.js';
 	import MediaGrid from './media-grid.svelte';
 	import MediaLightbox from './media-lightbox.svelte';
@@ -162,7 +162,7 @@
 			selected.clear();
 			if (n > 0) {
 				toast.success(`Removed ${formatCount(n)} from "${album.name}"`);
-				// Removing moves the album to the front of the strip.
+				// The album strip's covers and counts change with it.
 				onalbumschanged?.();
 			}
 		} catch (e) {
@@ -179,28 +179,29 @@
 		confirmOpen = true;
 	}
 
-	// One request per item, all at once. What was deleted leaves the grid and the selection; what failed stays selected.
+	// One request for the whole selection. What was deleted leaves the grid and the selection. On failure nothing changes, so the selection stays for a retry.
 	async function deleteSelected(event: MouseEvent) {
-		// The dialog stays open until every request has finished.
+		// The dialog stays open until the request has finished.
 		event.preventDefault();
 		const ids = confirmIds;
 		deleting = true;
-		const results = await Promise.allSettled(ids.map((id) => deleteMedia(id)));
-		deleting = false;
-		confirmOpen = false;
-		const gone = ids.filter((_, i) => results[i].status === 'fulfilled');
-		const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
-		if (gone.length > 0) {
-			dropLocal(gone);
-			for (const id of gone) selected.delete(id);
-			toast.success(`Deleted ${formatCount(gone.length)}`);
-			// The album strip's covers and counts change with it.
-			onalbumschanged?.();
-		}
-		if (failed) {
-			toast.error(`Couldn't delete ${formatCount(ids.length - gone.length)}`, {
-				description: failed.reason instanceof Error ? failed.reason.message : 'Something went wrong'
+		try {
+			const count = await deleteMediaItems(ids);
+			// Even when the server counted none, these ids no longer exist for the caller.
+			dropLocal(ids);
+			for (const id of ids) selected.delete(id);
+			if (count > 0) {
+				toast.success(`Deleted ${formatCount(count)}`);
+				// The album strip's covers and counts change with it.
+				onalbumschanged?.();
+			}
+		} catch (e) {
+			toast.error(`Couldn't delete ${formatCount(ids.length)}`, {
+				description: e instanceof Error ? e.message : 'Something went wrong'
 			});
+		} finally {
+			deleting = false;
+			confirmOpen = false;
 		}
 	}
 </script>

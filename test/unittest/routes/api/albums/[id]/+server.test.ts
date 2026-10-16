@@ -116,7 +116,7 @@ describe('PATCH /api/albums/:id', () => {
 
 		expect(db.album.updateMany).toHaveBeenCalledWith({
 			where: { id: 'a1', userId: 'u1' },
-			data: { name: 'New', updatedAt: expect.any(Date) }
+			data: { name: 'New' }
 		});
 		expect(res.status).toBe(200);
 		expect(res.headers.get('cache-control')).toBe('private, no-store');

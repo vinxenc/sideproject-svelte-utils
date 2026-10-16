@@ -202,7 +202,7 @@ describe('parseLimit', () => {
 });
 
 describe('listAlbums', () => {
-	it("queries the owner's albums newest first, one more than the limit", async () => {
+	it("queries the owner's albums newest first by createdAt, one more than the limit", async () => {
 		db.album.findMany.mockResolvedValue([]);
 
 		const page = await listAlbums('u1', 5, null);
@@ -210,14 +210,14 @@ describe('listAlbums', () => {
 		expect(db.album.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: { userId: 'u1' },
-				orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+				orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 				take: 6
 			})
 		);
 		expect(page).toEqual({ items: [], nextCursor: null });
 	});
 
-	it('adds the (updatedAt, id) keyset to the query when given a cursor', async () => {
+	it('adds the (createdAt, id) keyset to the query when given a cursor', async () => {
 		const at = new Date(1000);
 		db.album.findMany.mockResolvedValue([]);
 
@@ -227,7 +227,7 @@ describe('listAlbums', () => {
 			expect.objectContaining({
 				where: {
 					userId: 'u1',
-					OR: [{ updatedAt: { lt: at } }, { updatedAt: at, id: { lt: 'a9' } }]
+					OR: [{ createdAt: { lt: at } }, { createdAt: at, id: { lt: 'a9' } }]
 				}
 			})
 		);
@@ -235,9 +235,9 @@ describe('listAlbums', () => {
 
 	it('returns the summaries and a next cursor when a further album exists', async () => {
 		db.album.findMany.mockResolvedValue([
-			albumRow({ id: 'a2', updatedAt: UPDATED }),
-			albumRow({ id: 'a1', updatedAt: new Date(0) }),
-			albumRow({ id: 'a0', updatedAt: new Date(0) })
+			albumRow({ id: 'a2', createdAt: UPDATED }),
+			albumRow({ id: 'a1', createdAt: new Date(0) }),
+			albumRow({ id: 'a0', createdAt: new Date(0) })
 		]);
 
 		const page = await listAlbums('u1', 2, null);
@@ -294,7 +294,7 @@ describe('renameAlbum', () => {
 
 		expect(db.album.updateMany).toHaveBeenCalledWith({
 			where: { id: 'a1', userId: 'u1' },
-			data: { name: 'New', updatedAt: expect.any(Date) }
+			data: { name: 'New' }
 		});
 		expect(db.album.findFirst).toHaveBeenCalledWith({
 			where: { id: 'a1', userId: 'u1' },

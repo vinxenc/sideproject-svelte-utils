@@ -60,7 +60,7 @@ describe('GET /api/albums', () => {
 				take: 3,
 				where: {
 					userId: 'u1',
-					OR: [{ updatedAt: { lt: at } }, { updatedAt: at, id: { lt: 'a9' } }]
+					OR: [{ createdAt: { lt: at } }, { createdAt: at, id: { lt: 'a9' } }]
 				}
 			})
 		);

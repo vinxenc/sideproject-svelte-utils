@@ -56,6 +56,14 @@ export async function listMedia(
 	};
 }
 
+/** Soft-deletes the caller's READY items among `ids`. Ids that aren't theirs, are PENDING or are already deleted are not counted. */
+export async function deleteMediaItems(userId: string, ids: string[]): Promise<number> {
+	const { count } = await prisma.media.deleteMany({
+		where: { id: { in: ids }, userId, status: 'READY' }
+	});
+	return count;
+}
+
 export function toItem(m: Media): MediaItem {
 	return {
 		id: m.id,

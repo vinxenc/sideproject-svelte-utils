@@ -2,7 +2,7 @@
 	import AlbumStrip from '#lib/components/albums/album-strip.svelte';
 	import Gallery from '#lib/components/media/gallery.svelte';
 
-	// Bumped when an album changes, so the strip reorders and refreshes.
+	// Bumped when an album's covers or counts change, so the strip refreshes.
 	let albumsVersion = $state(0);
 </script>
 

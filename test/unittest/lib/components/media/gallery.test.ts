@@ -548,10 +548,10 @@ describe('Gallery bulk delete', () => {
 		expect(screen.getByText('2 selected')).toBeTruthy();
 	});
 
-	it('deletes each selected item, drops them from the grid and the selection, and reports', async () => {
-		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+	it('sends the whole selection in one request, drops it from the grid and the selection, and reports the count', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
 			init?.method === 'DELETE'
-				? new Response(null, { status: 204 })
+				? json({ deleted: 2 })
 				: json({ items: [a, b, c], nextCursor: null })
 		);
 		const onalbumschanged = vi.fn();
@@ -562,20 +562,38 @@ describe('Gallery bulk delete', () => {
 		await deleteSelected();
 
 		await waitFor(() => expect(tileNames(container)).toEqual(['c.jpg']));
-		expect(fetchMock).toHaveBeenCalledWith('/api/media/a', { method: 'DELETE' });
-		expect(fetchMock).toHaveBeenCalledWith('/api/media/b', { method: 'DELETE' });
+		expect(fetchMock).toHaveBeenCalledWith('/api/media', {
+			method: 'DELETE',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ mediaIds: ['a', 'b'] })
+		});
+		expect(deletes()).toEqual(['/api/media']);
 		await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull());
 		expect(toast.success).toHaveBeenCalledWith('Deleted 2 items');
-		expect(onalbumschanged).toHaveBeenCalled();
+		expect(onalbumschanged).toHaveBeenCalledTimes(1);
 	});
 
-	it('keeps the failed item selected and reports both outcomes when only some deletes fail', async () => {
-		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-			if (init?.method !== 'DELETE') return json({ items: [a, b, c], nextCursor: null });
-			return url === '/api/media/a'
-				? new Response(null, { status: 204 })
-				: json({ message: 'Not found' }, 404);
-		});
+	it('reports the count the server deleted, when it is fewer than the selection', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ deleted: 1 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		render(Gallery);
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted 1 item'));
+	});
+
+	it('drops ids the server no longer counts, without a toast or an album refresh', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ deleted: 0 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
 		const onalbumschanged = vi.fn();
 		const { container } = render(Gallery, { props: { onalbumschanged } });
 		await screen.findByTitle('a.jpg');
@@ -583,16 +601,13 @@ describe('Gallery bulk delete', () => {
 
 		await deleteSelected();
 
-		await waitFor(() => expect(tileNames(container)).toEqual(['b.jpg', 'c.jpg']));
-		expect(await screen.findByText('1 selected')).toBeTruthy();
-		expect(toast.success).toHaveBeenCalledWith('Deleted 1 item');
-		expect(toast.error).toHaveBeenCalledWith("Couldn't delete 1 item", {
-			description: 'Not found'
-		});
-		expect(onalbumschanged).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(tileNames(container)).toEqual(['c.jpg']));
+		await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull());
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(onalbumschanged).not.toHaveBeenCalled();
 	});
 
-	it('removes nothing, skips the album refresh and reports the count when every delete fails', async () => {
+	it('keeps everything selected and shows one error when the request fails', async () => {
 		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
 			init?.method === 'DELETE'
 				? json({ message: 'Not found' }, 404)
@@ -612,6 +627,7 @@ describe('Gallery bulk delete', () => {
 		);
 		expect(tileNames(container)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
 		expect(screen.getByText('2 selected')).toBeTruthy();
+		expect(toast.success).not.toHaveBeenCalled();
 		expect(onalbumschanged).not.toHaveBeenCalled();
 	});
 
@@ -635,9 +651,7 @@ describe('Gallery bulk delete', () => {
 
 	it('inside an album, deletes from the library and keeps Remove beside Delete', async () => {
 		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
-			init?.method === 'DELETE'
-				? new Response(null, { status: 204 })
-				: json({ items: [a], nextCursor: null })
+			init?.method === 'DELETE' ? json({ deleted: 1 }) : json({ items: [a], nextCursor: null })
 		);
 		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
 		await screen.findByTitle('a.jpg');
@@ -646,7 +660,7 @@ describe('Gallery bulk delete', () => {
 		expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
 		await deleteSelected();
 
-		await waitFor(() => expect(deletes()).toEqual(['/api/media/a']));
+		await waitFor(() => expect(deletes()).toEqual(['/api/media']));
 		expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/items'))).toBe(false);
 	});
 });

@@ -1,9 +1,11 @@
 import { error, json } from '@sveltejs/kit';
 import { checkMedia, THUMB_TYPE } from '#lib/media/types.js';
-import type { UploadTicket } from '#lib/media/types.js';
+import type { DeleteItemsResult, UploadTicket } from '#lib/media/types.js';
+import { parseMediaIds } from '#lib/server/albums.js';
 import { prisma, prismaBase } from '#lib/server/db.js';
 import {
 	decodeCursor,
+	deleteMediaItems,
 	listMedia,
 	MAX_THUMB_BYTES,
 	NO_STORE,
@@ -94,4 +96,12 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	]);
 	const ticket: UploadTicket = { id: media.id, contentType: checked.contentType, original, thumb };
 	return json(ticket, { status: 201, headers: NO_STORE });
+};
+
+// Soft-deletes the listed items in one request. Ids that aren't the caller's READY items are skipped, not a 404, so a retry is safe.
+export const DELETE: RequestHandler = async ({ locals, request }) => {
+	if (!locals.user) error(401, 'Sign in required');
+	const mediaIds = parseMediaIds(await request.json().catch(() => null));
+	const deleted = await deleteMediaItems(locals.user.id, mediaIds);
+	return json({ deleted } satisfies DeleteItemsResult, { headers: NO_STORE });
 };
