@@ -40,10 +40,12 @@ export function softDelete(delegates: Record<string, Writer>) {
 		const delegate = delegates[model];
 		if (!delegate) return query(args as never);
 		const scoped = { ...args, where: { deletedAt: null, ...(args as Where)?.where } };
+		// A delete only ever targets live rows, even if the caller passed its own deletedAt: it must not re-stamp one.
+		const live = { ...scoped.where, deletedAt: null };
 		if (operation === 'delete')
-			return delegate.update({ ...scoped, data: { deletedAt: new Date() } });
+			return delegate.update({ ...scoped, where: live, data: { deletedAt: new Date() } });
 		if (operation === 'deleteMany')
-			return delegate.updateMany({ where: scoped.where, data: { deletedAt: new Date() } });
+			return delegate.updateMany({ where: live, data: { deletedAt: new Date() } });
 		return query((FILTERED.has(operation) ? scoped : args) as never);
 	};
 }

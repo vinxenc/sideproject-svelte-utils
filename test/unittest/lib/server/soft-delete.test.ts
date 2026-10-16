@@ -77,6 +77,20 @@ describe('softDelete', () => {
 		});
 	});
 
+	it('never re-stamps a deleted row, even when the caller filters on deletedAt', async () => {
+		await run('delete', { where: { id: 'm1', deletedAt: { not: null } } });
+		await run('deleteMany', { where: { deletedAt: { not: null } } });
+
+		expect(media.update).toHaveBeenCalledWith({
+			where: { id: 'm1', deletedAt: null },
+			data: { deletedAt: expect.any(Date) }
+		});
+		expect(media.updateMany).toHaveBeenCalledWith({
+			where: { deletedAt: null },
+			data: { deletedAt: expect.any(Date) }
+		});
+	});
+
 	it('passes creates through untouched', async () => {
 		const args = { data: { name: 'a' } };
 
