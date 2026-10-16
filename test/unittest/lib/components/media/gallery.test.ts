@@ -293,6 +293,20 @@ describe('Gallery delete from the lightbox', () => {
 		);
 		expect(tileNames(container)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
 	});
+	it('closes the viewer when the only item it shows is deleted', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? new Response(null, { status: 204 })
+				: json({ items: [b], nextCursor: null })
+		);
+		const { container } = render(Gallery);
+		await screen.findByTitle('b.jpg');
+
+		await openDelete();
+
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		expect(tileNames(container)).toEqual([]);
+	});
 });
 
 describe('Gallery paging from the lightbox', () => {
@@ -500,5 +514,139 @@ describe('Gallery select mode', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
 		expect(await screen.findByRole('heading', { name: 'c.jpg' })).toBeTruthy();
+	});
+});
+
+describe('Gallery bulk delete', () => {
+	/** Taps the circle on each named tile, which starts select mode and then toggles. */
+	async function select(...names: string[]) {
+		for (const name of names)
+			await fireEvent.click(screen.getByRole('button', { name: `Select ${name}` }));
+	}
+
+	/** Opens the confirmation for the current selection and confirms it. */
+	async function deleteSelected() {
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+		await screen.findByText(/^Delete \d+ items?\?$/);
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+	}
+
+	const deletes = () =>
+		fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url);
+
+	it('opens a confirmation for the selection, and Cancel deletes nothing and keeps both selected', async () => {
+		servePages({ '': { items: [a, b, c], nextCursor: null } });
+		await renderGallery();
+		await select('a.jpg', 'b.jpg');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+
+		expect(await screen.findByText('Delete 2 items?')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByText('Delete 2 items?')).toBeNull());
+		expect(deletes()).toEqual([]);
+		expect(screen.getByText('2 selected')).toBeTruthy();
+	});
+
+	it('deletes each selected item, drops them from the grid and the selection, and reports', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? new Response(null, { status: 204 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() => expect(tileNames(container)).toEqual(['c.jpg']));
+		expect(fetchMock).toHaveBeenCalledWith('/api/media/a', { method: 'DELETE' });
+		expect(fetchMock).toHaveBeenCalledWith('/api/media/b', { method: 'DELETE' });
+		await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull());
+		expect(toast.success).toHaveBeenCalledWith('Deleted 2 items');
+		expect(onalbumschanged).toHaveBeenCalled();
+	});
+
+	it('keeps the failed item selected and reports both outcomes when only some deletes fail', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+			if (init?.method !== 'DELETE') return json({ items: [a, b, c], nextCursor: null });
+			return url === '/api/media/a'
+				? new Response(null, { status: 204 })
+				: json({ message: 'Not found' }, 404);
+		});
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() => expect(tileNames(container)).toEqual(['b.jpg', 'c.jpg']));
+		expect(await screen.findByText('1 selected')).toBeTruthy();
+		expect(toast.success).toHaveBeenCalledWith('Deleted 1 item');
+		expect(toast.error).toHaveBeenCalledWith("Couldn't delete 1 item", {
+			description: 'Not found'
+		});
+		expect(onalbumschanged).toHaveBeenCalledTimes(1);
+	});
+
+	it('removes nothing, skips the album refresh and reports the count when every delete fails', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ message: 'Not found' }, 404)
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete 2 items", {
+				description: 'Not found'
+			})
+		);
+		expect(tileNames(container)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+		expect(screen.getByText('2 selected')).toBeTruthy();
+		expect(onalbumschanged).not.toHaveBeenCalled();
+	});
+
+	it('describes a failure that is not an Error with a generic message', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+			if (init?.method === 'DELETE') throw 'x';
+			return json({ items: [a, b], nextCursor: null });
+		});
+		render(Gallery);
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete 1 item", {
+				description: 'Something went wrong'
+			})
+		);
+	});
+
+	it('inside an album, deletes from the library and keeps Remove beside Delete', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? new Response(null, { status: 204 })
+				: json({ items: [a], nextCursor: null })
+		);
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg');
+
+		expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+		await deleteSelected();
+
+		await waitFor(() => expect(deletes()).toEqual(['/api/media/a']));
+		expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/items'))).toBe(false);
 	});
 });

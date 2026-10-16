@@ -41,6 +41,11 @@ export async function createAlbum(name: string) {
 	return (await res.json()) as AlbumSummary;
 }
 
+export async function renameAlbum(id: string, name: string) {
+	const res = await sendJson(`/api/albums/${encodeURIComponent(id)}`, 'PATCH', { name });
+	return (await res.json()) as AlbumSummary;
+}
+
 export async function deleteAlbum(id: string): Promise<void> {
 	await send(`/api/albums/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }

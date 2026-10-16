@@ -68,18 +68,18 @@ Decisions: per-user uploads · S3-compatible storage (RustFS locally) via `aws4f
 
 ### Phase 5: Delete
 
-- [ ] `DELETE /api/media/[id]`: checks ownership, deletes both objects and the row
-- [ ] Select mode in the grid with checkboxes; bulk delete behind an `alert-dialog` confirmation
-- [ ] Delete button in the lightbox; the viewer must close when the item it shows is deleted, which `media-lightbox.svelte` no longer does by itself (the `$effect` that did it was removed while nothing could delete an item)
+- [x] `DELETE /api/media/[id]`: checks ownership, then soft-deletes the row (`deletedAt`); the stored objects and album links are kept
+- [x] Select mode in the grid (a tile's circle on hover, or press and hold on touch, instead of checkboxes); bulk delete behind an `alert-dialog` confirmation
+- [x] Delete button in the lightbox; when the item it shows is deleted, the viewer moves to the next item (or the previous one when it was last), and closes when none is left (`dropLocal` in `gallery.svelte`)
 
 ### Phase 6: Albums
 
-- [ ] `/api/albums`: list (with counts and cover), create, rename, delete
-- [ ] `POST/DELETE /api/albums/[id]/items`: add and remove items; checks the user owns both the album and the items
-- [ ] Album picker in the toolbar ("All" plus each album) that filters the grid: add an `album` filter to `GET /api/media`
-- [ ] `album-dialog.svelte`: create, rename and delete
-- [ ] "Add to album" for selected items; "Remove from album" when viewing an album
-- [ ] Album cover: first item when `coverId` isn't set
+- [x] `/api/albums`: list (with counts and cover), create, rename (`PATCH /api/albums/[id]`), delete
+- [x] `POST/DELETE /api/albums/[id]/items`: add and remove items; checks the user owns both the album and the items
+- [x] Albums filter the library through the album strip on `/photo-video` and the album pages (`/photo-video/albums/[id]`, fed by `GET /api/albums/[id]/media`) instead of a toolbar picker and an `album` filter on `GET /api/media`
+- [x] `create-album-dialog.svelte` and `rename-album-dialog.svelte`; delete is confirmed by an `alert-dialog` on the album page
+- [x] "Add to album" for selected items; "Remove from album" when viewing an album
+- [x] Album cover: first item when `coverId` isn't set
 
 ### Phase 7: shadcn components
 

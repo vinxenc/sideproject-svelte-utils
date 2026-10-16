@@ -3,10 +3,12 @@
 	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
 	import FileIcon from '@lucide/svelte/icons/file';
 	import ImagesIcon from '@lucide/svelte/icons/images';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import Trash2Icon from '@lucide/svelte/icons/trash-2';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { deleteAlbum } from '#lib/albums/api.js';
+	import RenameAlbumDialog from '#lib/components/albums/rename-album-dialog.svelte';
 	import Gallery from '#lib/components/media/gallery.svelte';
 	import { buttonVariants } from '#lib/components/ui/button/index.js';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
@@ -19,6 +21,7 @@
 
 	let confirmOpen = $state(false);
 	let deleting = $state(false);
+	let renameOpen = $state(false);
 	const album = $derived({ id: data.album.id, name: data.album.name });
 
 	// An anchor with `download`, so a failure shows up as a failed download and the page stays put.
@@ -73,6 +76,10 @@
 						<DownloadIcon />
 						Download
 					</DropdownMenu.Item>
+					<DropdownMenu.Item onSelect={() => (renameOpen = true)}>
+						<PencilIcon />
+						Rename
+					</DropdownMenu.Item>
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
@@ -102,6 +109,9 @@
 {#key data.album.id}
 	<Gallery {album} heading={title} empty={emptyAlbum} />
 {/key}
+
+<!-- Reloads the page data, so the title, the breadcrumb and the delete prompt all show the new name. -->
+<RenameAlbumDialog bind:open={renameOpen} {album} onrenamed={() => invalidateAll()} />
 
 <AlertDialog.Root bind:open={confirmOpen}>
 	<AlertDialog.Content>

@@ -111,6 +111,20 @@ export async function createAlbum(userId: string, name: string): Promise<AlbumSu
 	return toSummary(row);
 }
 
+/** Renames the album and bumps updatedAt, so it moves to the front of the list. null when not found / not owned. */
+export async function renameAlbum(
+	userId: string,
+	id: string,
+	name: string
+): Promise<AlbumSummary | null> {
+	const { count } = await prisma.album.updateMany({
+		where: { id, userId },
+		data: { name, updatedAt: new Date() }
+	});
+	if (count === 0) return null;
+	return getAlbumSummary(userId, id);
+}
+
 /** Soft-deletes the album. false when not found / not owned. */
 export async function deleteAlbum(userId: string, id: string): Promise<boolean> {
 	const { count } = await prisma.album.deleteMany({ where: { id, userId } });

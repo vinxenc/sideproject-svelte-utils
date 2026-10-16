@@ -4,7 +4,8 @@ import {
 	createAlbum,
 	deleteAlbum,
 	fetchAlbums,
-	removeFromAlbum
+	removeFromAlbum,
+	renameAlbum
 } from '#lib/albums/api.js';
 import { MAX_ITEMS_PER_REQUEST } from '#lib/albums/types.js';
 
@@ -90,6 +91,26 @@ describe('createAlbum', () => {
 		fetchMock.mockResolvedValue(reply({ status: 400, message: 'Enter an album name' }, 400));
 
 		await expect(createAlbum('x')).rejects.toThrow('Enter an album name');
+	});
+});
+
+describe('renameAlbum', () => {
+	it('patches the encoded id with the name as JSON and resolves to the summary', async () => {
+		const album = { id: 'a/1', name: 'New' };
+		fetchMock.mockResolvedValue(reply(album));
+
+		expect(await renameAlbum('a/1', 'New')).toEqual(album);
+		expect(fetchMock).toHaveBeenCalledWith('/api/albums/a%2F1', {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ name: 'New' })
+		});
+	});
+
+	it('throws the server message on a 404', async () => {
+		fetchMock.mockResolvedValue(reply({ status: 404, message: 'Not found' }, 404));
+
+		await expect(renameAlbum('a1', 'New')).rejects.toThrow('Not found');
 	});
 });
 
