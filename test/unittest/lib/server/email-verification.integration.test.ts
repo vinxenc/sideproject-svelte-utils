@@ -326,16 +326,21 @@ describe('pre-registration hijack', () => {
 		expect(memDb.session).toHaveLength(0);
 	});
 
-	it('does not re-claim a verified account: same user, same password, no mail', async () => {
+	it('refuses a sign-up for a verified account as already registered: same user, same password, no mail', async () => {
 		const { auth, memDb, mailer } = setup();
 		await signUp(auth);
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
 		await verify(auth, codeIn(mailer));
 		const id = memDb.user[0].id;
 
-		const again = await signUp(auth, ATTACKER_PASSWORD);
+		await expect(signUp(auth, ATTACKER_PASSWORD)).rejects.toMatchObject({
+			statusCode: 422,
+			body: {
+				code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
+				message: 'This email is already registered. Sign in instead.'
+			}
+		});
 
-		expect(again.token).toBeNull();
 		expect(memDb.user).toHaveLength(1);
 		expect(memDb.user[0].id).toBe(id);
 		expect(mailer.messages).toHaveLength(1);
@@ -344,7 +349,7 @@ describe('pre-registration hijack', () => {
 		).resolves.toMatchObject({ token: expect.any(String) });
 	});
 
-	it('does not re-claim an unverified account that has a session', async () => {
+	it('refuses a sign-up for an unverified account that has a session', async () => {
 		const { auth, memDb, mailer } = setup();
 		await signUp(auth);
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
@@ -358,7 +363,7 @@ describe('pre-registration hijack', () => {
 			updatedAt: new Date()
 		});
 
-		await signUp(auth, ATTACKER_PASSWORD);
+		await expect(signUp(auth, ATTACKER_PASSWORD)).rejects.toMatchObject({ statusCode: 422 });
 
 		expect(memDb.user).toHaveLength(1);
 		expect(memDb.user[0].id).toBe(id);
@@ -376,14 +381,14 @@ describe('pre-registration hijack', () => {
 		expect(memDb.user[0].id).toBe(id);
 	});
 
-	it('does not re-claim an unverified account that owns data, even with no session', async () => {
+	it('refuses a sign-up for an unverified account that owns data, even with no session', async () => {
 		const owns = vi.fn<OwnsData>().mockResolvedValue(true);
 		const { auth, memDb, mailer } = setup(owns);
 		await signUp(auth);
 		await vi.waitFor(() => expect(mailer.messages).toHaveLength(1));
 		const id = memDb.user[0].id;
 
-		await signUp(auth, ATTACKER_PASSWORD);
+		await expect(signUp(auth, ATTACKER_PASSWORD)).rejects.toMatchObject({ statusCode: 422 });
 
 		expect(owns).toHaveBeenCalledWith(id);
 		expect(memDb.user).toHaveLength(1);

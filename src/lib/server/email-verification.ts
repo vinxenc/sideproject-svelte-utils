@@ -74,9 +74,10 @@ export function ownsData(db: Record<'password' | 'media' | 'album', Delegate>): 
 /**
  * Re-claim: a sign-up for an email whose account is still unverified replaces that account, so whoever
  * pre-registered a victim's email cannot squat it. The core sign-up then creates the user, hashes the
- * password and mails the new code. An account with a session, or one that owns data, is left alone (it
- * falls through to the generic duplicate answer): unverified users get neither on this flow, so only a
- * pre-verification-era account that has been used is protected.
+ * password and mails the new code. A verified account, or an unverified one with a session or owned data
+ * (only a pre-verification-era account that has been used), is never touched: the sign-up is refused with
+ * "already registered". That answer reveals which emails have accounts, which was chosen over the core's
+ * generic success (a fake success left a person on /verify-email waiting for a mail that never came).
  */
 async function reclaimUnverified(
 	ctx: HookContext,
@@ -89,9 +90,17 @@ async function reclaimUnverified(
 	const { minPasswordLength, maxPasswordLength } = hasher.config;
 	if (password.length < minPasswordLength || password.length > maxPasswordLength) return;
 	const found = await internalAdapter.findUserByEmail(email.toLowerCase());
-	if (!found || found.user.emailVerified) return;
-	if ((await internalAdapter.listSessions(found.user.id)).length > 0) return;
-	if (await owns(found.user.id)) return;
+	if (!found) return;
+	if (
+		found.user.emailVerified ||
+		(await internalAdapter.listSessions(found.user.id)).length > 0 ||
+		(await owns(found.user.id))
+	) {
+		throw new APIError('UNPROCESSABLE_ENTITY', {
+			code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
+			message: 'This email is already registered. Sign in instead.'
+		});
+	}
 	await internalAdapter.deleteUser(found.user.id);
 	await internalAdapter.deleteVerificationByIdentifier(
 		otpIdentifier(found.user.email, SIGN_UP_OTP_TYPE)
