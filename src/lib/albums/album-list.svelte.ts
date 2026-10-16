@@ -20,7 +20,7 @@ export class AlbumList {
 		this.#limit = limit;
 	}
 
-	/** Next page; no-op while loading or done. Dedupes by id (updatedAt can change between pages). */
+	/** Next page; no-op while loading or done. Dedupes by id as a guard: an album never repeats across pages, but a stale page could. */
 	async load(): Promise<void> {
 		if (this.loading || this.done) return;
 		const generation = this.#generation;

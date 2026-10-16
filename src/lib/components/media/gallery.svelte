@@ -1,6 +1,7 @@
 <script lang="ts">
 	import FolderMinusIcon from '@lucide/svelte/icons/folder-minus';
 	import FolderPlusIcon from '@lucide/svelte/icons/folder-plus';
+	import Trash2Icon from '@lucide/svelte/icons/trash-2';
 	import XIcon from '@lucide/svelte/icons/x';
 	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
@@ -9,8 +10,10 @@
 	import { removeFromAlbum } from '#lib/albums/api.js';
 	import { formatCount } from '#lib/albums/format.js';
 	import AddToAlbumDialog from '#lib/components/albums/add-to-album-dialog.svelte';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { deleteMedia } from '#lib/media/api.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { deleteMedia, deleteMediaItems } from '#lib/media/api.js';
 	import type { MediaItem, MediaPage } from '#lib/media/types.js';
 	import MediaGrid from './media-grid.svelte';
 	import MediaLightbox from './media-lightbox.svelte';
@@ -53,6 +56,10 @@
 	let pickerOpen = $state(false);
 	let pickerIds = $state.raw<string[]>([]);
 	let removing = $state(false);
+	let confirmOpen = $state(false);
+	/** The selection the confirmation is about, captured when it opens so its title can't change under it. */
+	let confirmIds = $state.raw<string[]>([]);
+	let deleting = $state(false);
 
 	// One id, so repeated failures replace the toast instead of stacking up.
 	const LOAD_ERROR_TOAST = 'gallery-load-error';
@@ -155,7 +162,7 @@
 			selected.clear();
 			if (n > 0) {
 				toast.success(`Removed ${formatCount(n)} from "${album.name}"`);
-				// Removing moves the album to the front of the strip.
+				// The album strip's covers and counts change with it.
 				onalbumschanged?.();
 			}
 		} catch (e) {
@@ -164,6 +171,37 @@
 			});
 		} finally {
 			removing = false;
+		}
+	}
+
+	function confirmDelete() {
+		confirmIds = [...selected];
+		confirmOpen = true;
+	}
+
+	// One request for the whole selection. What was deleted leaves the grid and the selection. On failure nothing changes, so the selection stays for a retry.
+	async function deleteSelected(event: MouseEvent) {
+		// The dialog stays open until the request has finished.
+		event.preventDefault();
+		const ids = confirmIds;
+		deleting = true;
+		try {
+			const count = await deleteMediaItems(ids);
+			// Even when the server counted none, these ids no longer exist for the caller.
+			dropLocal(ids);
+			for (const id of ids) selected.delete(id);
+			if (count > 0) {
+				toast.success(`Deleted ${formatCount(count)}`);
+				// The album strip's covers and counts change with it.
+				onalbumschanged?.();
+			}
+		} catch (e) {
+			toast.error(`Couldn't delete ${formatCount(ids.length)}`, {
+				description: e instanceof Error ? e.message : 'Something went wrong'
+			});
+		} finally {
+			deleting = false;
+			confirmOpen = false;
 		}
 	}
 </script>
@@ -206,16 +244,52 @@
 		<span class="text-sm">{selected.size} selected</span>
 		<Button size="sm" onclick={() => openPicker([...selected])}>
 			<FolderPlusIcon data-icon="inline-start" />
-			Add to album
+			<span class="max-sm:sr-only">Add to album</span>
 		</Button>
 		{#if album}
 			<Button size="sm" variant="outline" disabled={removing} onclick={() => remove([...selected])}>
 				<FolderMinusIcon data-icon="inline-start" />
-				Remove
+				<span class="max-sm:sr-only">Remove</span>
 			</Button>
 		{/if}
+		<Button
+			size="icon-sm"
+			variant="destructive"
+			aria-label="Delete selected"
+			onclick={confirmDelete}
+		>
+			<Trash2Icon />
+		</Button>
 	</div>
 {/if}
+
+<!-- Not dismissable mid-request: closing it would invite a second Delete for items that are already gone. -->
+<AlertDialog.Root
+	bind:open={
+		() => confirmOpen,
+		(open) => {
+			if (!deleting) confirmOpen = open;
+		}
+	}
+>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Delete {formatCount(confirmIds.length)}?</AlertDialog.Title>
+			<AlertDialog.Description>
+				They are removed from your library and from every album, and can't be recovered.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel disabled={deleting}>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action variant="destructive" disabled={deleting} onclick={deleteSelected}>
+				{#if deleting}
+					<Spinner data-icon="inline-start" />
+				{/if}
+				Delete
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
 
 <MediaLightbox
 	{items}

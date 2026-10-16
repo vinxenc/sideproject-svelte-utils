@@ -4,7 +4,7 @@ import { uploads } from '#lib/media/uploads.svelte.js';
 import Page from '../../../../../../../src/routes/(app)/photo-video/albums/[id]/+page.svelte';
 
 const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
-const nav = vi.hoisted(() => ({ goto: vi.fn() }));
+const nav = vi.hoisted(() => ({ goto: vi.fn(), invalidateAll: vi.fn() }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }));
 vi.mock('$app/navigation', () => nav);
 vi.mock('svelte-sonner', () => ({ toast }));
@@ -44,14 +44,14 @@ async function chooseFromMenu(name: string) {
 const chooseDelete = () => chooseFromMenu('Delete');
 
 describe('Album page', () => {
-	it('lists New file and Download above Delete in the menu', async () => {
+	it('lists New file, Download and Rename above Delete in the menu', async () => {
 		render(Page, { props: { data } });
 		const trigger = screen.getByRole('button', { name: 'Album options' });
 		await fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
 
 		const items = (await screen.findAllByRole('menuitem')).map((el) => el.textContent?.trim());
 
-		expect(items).toEqual(['New file', 'Download', 'Delete']);
+		expect(items).toEqual(['New file', 'Download', 'Rename', 'Delete']);
 		expect(screen.getByText('File')).toBeTruthy();
 	});
 
@@ -89,6 +89,28 @@ describe('Album page', () => {
 		await waitFor(() =>
 			expect(fetchMock.mock.calls.map(([url]) => url)).toContain('/api/albums/a1/media')
 		);
+	});
+
+	it('renames the album from the menu, then reloads the page data', async () => {
+		fetchMock.mockImplementation(async (_url, init) =>
+			init?.method === 'PATCH'
+				? json({ id: 'a1', name: 'Holiday', count: 0, createdAt: '', updatedAt: '', previews: [] })
+				: json({ items: [], nextCursor: null })
+		);
+		render(Page, { props: { data } });
+
+		await chooseFromMenu('Rename');
+		const input = (await screen.findByLabelText('Name')) as HTMLInputElement;
+		await waitFor(() => expect(input.value).toBe('Trip'));
+		await fireEvent.input(input, { target: { value: 'Holiday' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		await waitFor(() => expect(nav.invalidateAll).toHaveBeenCalled());
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/api/albums/a1',
+			expect.objectContaining({ method: 'PATCH' })
+		);
+		expect(toast.success).toHaveBeenCalledWith('Album renamed');
 	});
 
 	it('says the album is empty once its first page has loaded with nothing in it', async () => {

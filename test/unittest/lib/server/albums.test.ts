@@ -9,6 +9,7 @@ import {
 	listAlbumMedia,
 	listAlbums,
 	parseLimit,
+	renameAlbum,
 	parseMediaIds,
 	removeItems,
 	summarySelect,
@@ -24,7 +25,8 @@ const db = vi.hoisted(() => ({
 		findFirst: vi.fn(),
 		create: vi.fn(),
 		deleteMany: vi.fn(),
-		update: vi.fn()
+		update: vi.fn(),
+		updateMany: vi.fn()
 	},
 	media: { findMany: vi.fn(), count: vi.fn() },
 	albumMedia: { createMany: vi.fn(), deleteMany: vi.fn() },
@@ -46,6 +48,7 @@ beforeEach(() => {
 		db.album.create,
 		db.album.deleteMany,
 		db.album.update,
+		db.album.updateMany,
 		db.media.findMany,
 		db.media.count,
 		db.albumMedia.createMany,
@@ -106,6 +109,12 @@ describe('toSummary', () => {
 		);
 
 		expect(summary.previews.map((p) => p.id)).toEqual(['b', 'a', 'c']);
+	});
+
+	it('leads with the first-added items when there is no cover', () => {
+		const summary = toSummary(albumRow({ media: [link('a'), link('b')] }) as never);
+
+		expect(summary.previews.map((p) => p.id)).toEqual(['a', 'b']);
 	});
 
 	it('skips a cover that is not READY', () => {
@@ -193,7 +202,7 @@ describe('parseLimit', () => {
 });
 
 describe('listAlbums', () => {
-	it("queries the owner's albums newest first, one more than the limit", async () => {
+	it("queries the owner's albums newest first by createdAt, one more than the limit", async () => {
 		db.album.findMany.mockResolvedValue([]);
 
 		const page = await listAlbums('u1', 5, null);
@@ -201,14 +210,14 @@ describe('listAlbums', () => {
 		expect(db.album.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: { userId: 'u1' },
-				orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+				orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 				take: 6
 			})
 		);
 		expect(page).toEqual({ items: [], nextCursor: null });
 	});
 
-	it('adds the (updatedAt, id) keyset to the query when given a cursor', async () => {
+	it('adds the (createdAt, id) keyset to the query when given a cursor', async () => {
 		const at = new Date(1000);
 		db.album.findMany.mockResolvedValue([]);
 
@@ -218,7 +227,7 @@ describe('listAlbums', () => {
 			expect.objectContaining({
 				where: {
 					userId: 'u1',
-					OR: [{ updatedAt: { lt: at } }, { updatedAt: at, id: { lt: 'a9' } }]
+					OR: [{ createdAt: { lt: at } }, { createdAt: at, id: { lt: 'a9' } }]
 				}
 			})
 		);
@@ -226,9 +235,9 @@ describe('listAlbums', () => {
 
 	it('returns the summaries and a next cursor when a further album exists', async () => {
 		db.album.findMany.mockResolvedValue([
-			albumRow({ id: 'a2', updatedAt: UPDATED }),
-			albumRow({ id: 'a1', updatedAt: new Date(0) }),
-			albumRow({ id: 'a0', updatedAt: new Date(0) })
+			albumRow({ id: 'a2', createdAt: UPDATED }),
+			albumRow({ id: 'a1', createdAt: new Date(0) }),
+			albumRow({ id: 'a0', createdAt: new Date(0) })
 		]);
 
 		const page = await listAlbums('u1', 2, null);
@@ -273,6 +282,39 @@ describe('createAlbum and deleteAlbum', () => {
 		expect(await deleteAlbum('u1', 'a1')).toBe(true);
 		expect(await deleteAlbum('u2', 'a1')).toBe(false);
 		expect(db.album.deleteMany).toHaveBeenCalledWith({ where: { id: 'a1', userId: 'u2' } });
+	});
+});
+
+describe('renameAlbum', () => {
+	it("renames the caller's album and returns its summary", async () => {
+		db.album.updateMany.mockResolvedValue({ count: 1 });
+		db.album.findFirst.mockResolvedValue(albumRow({ name: 'New' }));
+
+		const album = await renameAlbum('u1', 'a1', 'New');
+
+		expect(db.album.updateMany).toHaveBeenCalledWith({
+			where: { id: 'a1', userId: 'u1' },
+			data: { name: 'New' }
+		});
+		expect(db.album.findFirst).toHaveBeenCalledWith({
+			where: { id: 'a1', userId: 'u1' },
+			select: summarySelect
+		});
+		expect(album).toEqual(toSummary(albumRow({ name: 'New' }) as never));
+	});
+
+	it('returns null without reading the album when no row was renamed', async () => {
+		db.album.updateMany.mockResolvedValue({ count: 0 });
+
+		expect(await renameAlbum('u2', 'a1', 'New')).toBeNull();
+		expect(db.album.findFirst).not.toHaveBeenCalled();
+	});
+
+	it('returns null when the album vanishes between the update and the read', async () => {
+		db.album.updateMany.mockResolvedValue({ count: 1 });
+		db.album.findFirst.mockResolvedValue(null);
+
+		expect(await renameAlbum('u1', 'a1', 'New')).toBeNull();
 	});
 });
 

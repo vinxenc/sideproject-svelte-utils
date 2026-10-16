@@ -156,8 +156,8 @@ model Album {
   deletedAt DateTime?
   media     AlbumMedia[]
 
-  // The album list: one user's albums, most recently changed first, paged by (updatedAt, id).
-  @@index([userId, updatedAt(sort: Desc), id(sort: Desc)])
+  // The album list: one user's albums, newest first, paged by (createdAt, id).
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
   @@map("album")
 }
 
