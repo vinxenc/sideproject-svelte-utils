@@ -10,7 +10,7 @@ An installable Progressive Web App (PWA) for web, mobile and desktop, built with
 | UI        | [shadcn-svelte](https://shadcn-svelte.com) (style `nova`, base color `neutral`), [Bits UI](https://bits-ui.com), [Lucide](https://lucide.dev) icons, [mode-watcher](https://mode-watcher.svecosystem.com) for dark/light mode |
 | Styling   | [Tailwind CSS v4](https://tailwindcss.com) via `@tailwindcss/vite`, Inter font                                                                                                                                                |
 | PWA       | SvelteKit built-in service worker + static web manifest, icons from `@vite-pwa/assets-generator`                                                                                                                              |
-| Auth / DB | [Better Auth](https://www.better-auth.com) (email + password, email OTP engine) → [Prisma 7](https://www.prisma.io/docs) + `@prisma/adapter-pg` → PostgreSQL 18 (local: Docker, `docker-compose.yml`)                         |
+| Auth / DB | [Better Auth](https://www.better-auth.com) (email + password with email-OTP verification) → [Prisma 7](https://www.prisma.io/docs) + `@prisma/adapter-pg` → PostgreSQL 18 (local: Docker, `docker-compose.yml`)               |
 | Mail      | Plain-text mail through a `Mailer` adapter (`src/lib/server/mail/`), SMTP via [Nodemailer](https://nodemailer.com); local: [Mailpit](https://mailpit.axllent.org)                                                             |
 | Hosting   | Not chosen yet; local only (`pnpm dev`, `pnpm preview`)                                                                                                                                                                       |
 | Tooling   | pnpm, Vite 8, Vitest, ESLint, Prettier, svelte-check, [Lefthook](https://lefthook.dev) (git hooks)                                                                                                                            |
@@ -42,12 +42,13 @@ src/
     layout.css             Tailwind + shadcn theme tokens (light/dark)
     +page.server.ts        "/" redirects to /dashboard
     (app)/                 requires a session, else redirects to /sign-in
-      dashboard/           landing page after sign-in/sign-up (sidebar-13 layout, full page)
+      dashboard/           landing page after sign-in/verification (sidebar-13 layout, full page)
       passwords/           password vault: list, search, add, reveal, delete (see "Passwords" below)
     api/auth/[...all]/     Better Auth REST API (sign-in, sign-up, get-session, …)
     api/passwords/         POST /api/passwords, DELETE /api/passwords/[id], POST /api/passwords/[id]/reveal (no-store)
     (guest)/               redirects signed-in users to /dashboard
       sign-in/  sign-up/   auth pages (shadcn blocks login-02, signup-02)
+      verify-email/        enter the sign-up code (shadcn input-otp, otp-02 layout)
   env.ts                   env var definitions (read via $app/env/private)
   hooks.server.ts          fills locals.user via lib/server/session.ts
   lib/
@@ -57,17 +58,21 @@ src/
       prisma/              generated Prisma client (gitignored, `pnpm db:generate`)
       mail/                `Mailer` adapter: `mailer.ts` (interface), `smtp-mailer.ts` (nodemailer), `messages.ts` (plain-text bodies), `index.ts` (picks the provider)
       email-otp.ts         `EmailOtp`: send/verify a one-time code to the session user's email (Better Auth `emailOTP` plugin as engine)
+      email-verification.ts  sign-up verification: already-verified guard, mail callback, rate-limit options
+      client-ip.ts         client IP header for Better Auth's rate limiter
     auth-client.ts         Better Auth Svelte client (authClient.signIn / useSession / …)
+    verify-email.ts        verify page helpers (sessionStorage hand-off, masking, error texts)
     passwords/             shared password types and checks, avatar colours, search and tab-strip helpers, client API
     components/
       ui/                  shadcn-svelte components (generated, managed by the CLI)
       site-header.svelte   dark/light toggle (top-right); logo bar only in the desktop app title bar
       login-form.svelte    sign-in form
       signup-form.svelte   sign-up form
+      verify-email-form.svelte  verify page form (6-box code entry, resend)
       passwords/           password vault components (row, reveal, add and detail sheets)
     utils.ts               cn() + shadcn helper types
   service-worker/          offline caching (own tsconfig, WebWorker types)
-prisma/schema.prisma       Better Auth models (user, session, account, verification, jwks)
+prisma/schema.prisma       Better Auth models (user, session, account, verification, jwks, rateLimit)
 prisma/migrations/         SQL migrations (prisma migrate dev)
 docker-compose.yml         local Postgres 18, RustFS and Mailpit
 prisma.config.ts           Prisma CLI config: loads .env (dotenv), DATABASE_URL from the environment
@@ -136,15 +141,41 @@ The vault at `/passwords` keeps one user's entries: a name, a type (app, credit 
 
 ## Email OTP
 
+- **Sign-up verification (plugin-native consumer):**
+  - Flow: sign-up → no session → code mailed → `/verify-email` → `email-otp/verify-email` verifies and signs in.
+  - An unverified sign-in returns 403 and re-mails a code.
+  - The email travels via `sessionStorage`, never the URL. `/verify-email` shows it masked (`tr******@gmail.com`) and has no email field; a tab with nothing pending is sent to `/sign-in`, where an unverified sign-in mails a fresh code.
+  - Only `email-otp/verify-email` and `email-otp/send-verification-otp` are open. Every other email-otp route, plus core `/verify-email` and `/send-verification-email`, answers 404.
+  - The already-verified guard (`beforeEmailVerification`): a mailbox alone never yields a session for a verified account.
+  - The callback mails only `email-verification` codes, and only to unverified users. The open send route refuses any other `type` (400), because it stores a code row for whatever type it is given.
+  - A sign-up with a taken (verified) email answers like a new one and mails nothing.
+  - **Pre-registration hijack (closed):** someone who signs up first with a victim's email and a password they know must not end up owning the victim's verified account. Two rules, both in `EMAIL_VERIFICATION_HOOKS` (`hooks.before`, `src/lib/server/email-verification.ts`):
+    - **Re-claim:** a sign-up for an email whose account is still unverified deletes that account and creates a new one with the new password and a new code, so squatting an address does not block its owner. An unverified account that has a session row, or owns passwords, media or albums, is left alone (only pre-verification-era accounts can). A sign-up the core would refuse (password length, missing name) deletes nothing. Verified accounts are never touched.
+    - **Password proof:** `email-otp/verify-email` also needs the account's password in the body (checked before the code, so a wrong password costs no attempt). A mailbox alone cannot verify, and sign in to, an account whose password someone else chose. Unknown email, missing or wrong password all answer like a wrong code (`INVALID_OTP`) after one hash, so neither the answer nor its timing shows whether an account exists. The `/verify-email` form takes the password from memory (sign-up and sign-in hold it in a module variable, never in storage or the URL) and asks for it after a reload.
+    - Residual: an attacker can keep re-claiming to stop a victim from ever verifying (a nuisance, not a takeover), bounded by the rate limit below. The code is mailed to the victim each time.
+  - Existing users were marked verified by the migration.
+- **Rate limits:**
+  - Better Auth's built-in limiter, `storage: 'database'` (the `rateLimit` table, shared by every instance).
+  - Rules:
+    - 3 requests per 60 s per IP for `email-otp/send-verification-otp` and `email-otp/verify-email`
+    - 3 per 10 s for `/sign-in*` and `/sign-up*`
+    - 100 per 10 s elsewhere
+    - `/get-session` and `/jwks` exempt
+  - A wrong code costs an attempt in the database (5 tries, then the code is deleted; the 6th try answers 403 `TOO_MANY_ATTEMPTS`). This cap holds across instances.
+  - **Caveat:** the limit is per IP and path, not per user or email. A NAT shares one bucket; many IPs (IPv6 /64) get many buckets.
+  - The client IP is `getClientAddress()`, passed in `x-utilities-client-ip` by `/api/auth`. Behind a proxy, set adapter-node's `ADDRESS_HEADER` / `XFF_DEPTH`. Without an address Better Auth uses one shared bucket per path in production and 127.0.0.1 in dev.
+
+**Step-up building block (`EmailOtp`):**
+
 - A step-up check for a signed-in user: a 6-digit code to the session user's email, valid 10 minutes, 5 wrong tries (the next attempt locks the code), stored hashed.
 - **The 60-second resend gap holds only while a code exists.** A second send within 60 seconds is refused with `TOO_SOON`, but a lockout, a successful verify or an expiry ends the code, so the next send is immediate.
 - **The 5-try cap holds for one server instance only.** `verify` calls for the same email run one at a time inside the process, so parallel guesses cannot all read the same counter. Across several instances the cap does not hold: each instance counts its own tries. A consumer that runs on more than one instance needs a shared rate limit or a database-side counter before it ships. This is a prerequisite for the consumer, not something this building block provides.
 - **Hard prerequisite for the consumer: its send and verify routes must apply a per-user rate limit, shared across instances.** `EmailOtp`'s own resend gap and attempt cap are per code and per process, so a lockout or a new send starts a fresh counter. This building block does not provide that limit; the consumer must add it.
-- Mail: `EmailOtp` mails the code itself through the `Mailer`, and deletes the row it created if the mail fails. The plugin's own mail callback throws, so nothing mails through the plugin.
-- Server-only: the consumer owns the routes and UI. No consumer ships yet; the first is the passkey Join in [docs/password-management-plan.md](docs/password-management-plan.md).
-- The plugin's HTTP endpoints (`/api/auth/email-otp/*`, `/api/auth/sign-in/email-otp`, `/api/auth/forget-password/email-otp`) answer 404 on purpose, because they would let a mailbox alone sign in or reset a password. They still appear in `/api/auth/reference`.
+- Mail: `EmailOtp` mails its own codes through the `Mailer`, and deletes the row it created if the mail fails. The plugin callback only serves sign-up.
+- Server-only: the consumer owns the routes and UI. No step-up consumer ships yet; the first is the passkey Join in [docs/password-management-plan.md](docs/password-management-plan.md).
+- The plugin's other HTTP endpoints answer 404, as listed under sign-up verification above, because they would let a mailbox alone sign in or reset a password. They still appear in `/api/auth/reference`.
 - Switching provider: change the one line in `src/lib/server/mail/index.ts`. SMTP already covers Resend, SES and Postmark.
-- One code per email: a second consumer needs its own type.
+- One code per email and type: `EmailOtp` uses the plugin type `sign-in` (`OTP_TYPE`), which no open route serves (the open send route only takes `email-verification`, and `/sign-in/email-otp` answers 404), so sign-up traffic can neither overwrite nor burn a step-up code. A second step-up consumer still needs a type of its own (or a purpose in the identifier): the plugin has only `sign-in`, `forget-password`, `email-verification` and `change-email`, and a code requested for one flow would satisfy the other.
 
 ## Scripts
 
@@ -214,7 +245,7 @@ CI (`.github/workflows/ci.yml`) runs on every pull request to `master`: install 
 - **HTTPS only:** required for `__Secure-` cookies, and a leaked token is usable immediately.
 - **Key rotation:** set `jwt({ jwks: { rotationInterval, gracePeriod } })`. `src/lib/server/session.ts` caches the JWKS until restart, so make it refetch when it sees an unknown `kid` (or use `jose`'s `createRemoteJWKSet`, which does this) before turning rotation on.
 - **Revocation lag:** a revoked session's access token stays valid until it expires (5 min). Shorten `session.cookieCache.maxAge` if that matters.
-- **Rate limiting:** Better Auth's limiter needs the real client IP behind a proxy: set `advanced.ipAddress.ipAddressHeaders` (e.g. `x-forwarded-for`) or `trustedProxies`.
+- **Rate limiting:** the client IP is SvelteKit's `getClientAddress()`, which `/api/auth` passes in `x-utilities-client-ip`. Behind a proxy, set adapter-node's `ADDRESS_HEADER` / `XFF_DEPTH` so that address is the real client. `ipAddressHeaders` is already set to our own header; don't add `x-forwarded-for`, because it is client-controlled without `trustedProxies`.
 - **API docs:** `openAPI()` publishes every auth endpoint at `/api/auth/reference`; enable it only outside production if that matters.
 - **Splitting auth into its own service:** route `/api/auth/*` to it with a reverse proxy (cookies keep working), and point the two URLs in `session.ts` (`/api/auth/jwks`, `/api/auth/get-session`) at it.
 

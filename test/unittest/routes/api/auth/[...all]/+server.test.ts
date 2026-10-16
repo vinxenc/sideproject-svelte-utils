@@ -20,9 +20,12 @@ vi.mock('better-auth/svelte-kit', () => ({ toSvelteKitHandler: better.toSvelteKi
 /** A request event for the catch-all route, with `all` as SvelteKit's decoded param. */
 function eventFor(all: string) {
 	const request = new Request(`http://localhost/api/auth/${all}`);
-	return { params: { all }, request, url: new URL(request.url) } as unknown as Parameters<
-		typeof GET
-	>[0];
+	return {
+		params: { all },
+		request,
+		url: new URL(request.url),
+		getClientAddress: () => '203.0.113.7'
+	} as unknown as Parameters<typeof GET>[0];
 }
 
 describe('/api/auth/[...all]', () => {
@@ -32,16 +35,18 @@ describe('/api/auth/[...all]', () => {
 	});
 
 	it.each([
-		'email-otp/send-verification-otp',
 		'email-otp/check-verification-otp',
-		'email-otp/verify-email',
 		'email-otp/reset-password',
 		'email-otp/request-password-reset',
 		'email-otp/request-email-change',
 		'email-otp/change-email',
+		'email-otp/verify-email/x',
 		'sign-in/email-otp',
 		'forget-password/email-otp',
-		'Sign-In/Email-OTP/'
+		'Sign-In/Email-OTP/',
+		'verify-email',
+		'VERIFY-EMAIL/',
+		'send-verification-email'
 	])('answers 404 for %s without reaching Better Auth', async (all) => {
 		await expect(GET(eventFor(all))).rejects.toMatchObject({
 			status: 404,
@@ -51,17 +56,25 @@ describe('/api/auth/[...all]', () => {
 		expect(better.handler).not.toHaveBeenCalled();
 	});
 
-	it.each(['get-session', 'sign-in/email', 'sign-up/email', 'jwks'])(
-		'passes %s through to Better Auth and returns its response',
-		async (all) => {
-			const handled = new Response('ok');
-			better.handler.mockResolvedValueOnce(handled);
-			const event = eventFor(all);
+	it.each([
+		'email-otp/verify-email',
+		'email-otp/send-verification-otp',
+		'Email-OTP/Verify-Email/',
+		'get-session',
+		'sign-in/email',
+		'sign-up/email',
+		'jwks'
+	])('passes %s through to Better Auth and returns its response', async (all) => {
+		const handled = new Response('ok');
+		better.handler.mockResolvedValueOnce(handled);
+		const event = eventFor(all);
 
-			const response = await GET(event);
+		const response = await GET(event);
 
-			expect(response).toBe(handled);
-			expect(better.handler).toHaveBeenCalledWith(event);
-		}
-	);
+		expect(response).toBe(handled);
+		expect(better.handler).toHaveBeenCalledOnce();
+		const [{ request }] = better.handler.mock.calls[0] as [{ request: Request }];
+		expect(request.url).toBe(event.request.url);
+		expect(request.headers.get('x-utilities-client-ip')).toBe('203.0.113.7');
+	});
 });
