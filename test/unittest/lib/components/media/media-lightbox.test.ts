@@ -283,6 +283,60 @@ describe('MediaLightbox album menu', () => {
 		expect(onaddtoalbum).toHaveBeenCalledWith('b');
 	});
 
+	it('lets taps through a playing video while the menu is open, so an outside tap can close it', async () => {
+		render(MediaLightbox, {
+			items: three,
+			openId: 'b',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			onaddtoalbum: vi.fn()
+		} as never);
+		const video = document.querySelector('video') as HTMLVideoElement;
+		expect(video.classList.contains('pointer-events-none')).toBe(false);
+
+		await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		await screen.findByRole('menu');
+		expect(video.classList.contains('pointer-events-none')).toBe(true);
+
+		await fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+		await waitFor(() => expect(video.classList.contains('pointer-events-none')).toBe(false));
+	});
+
+	it('closes the open menu on a touch tap outside it, through the bits-ui dismissal path', async () => {
+		render(MediaLightbox, {
+			items: three,
+			openId: 'b',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			onaddtoalbum: vi.fn()
+		} as never);
+		const video = document.querySelector('video') as HTMLVideoElement;
+		await fireEvent.pointerDown(screen.getByRole('button', { name: 'More options' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		await screen.findByRole('menu');
+		expect(video.classList.contains('pointer-events-none')).toBe(true);
+
+		// A touch dismissal waits for the tap's click; the click lands on the caption row under the video.
+		const outside = document.querySelector('span.truncate') as HTMLElement; // the caption row
+		await fireEvent.pointerDown(outside, {
+			pointerType: 'touch',
+			button: 0,
+			clientX: 1,
+			clientY: 1
+		});
+		await new Promise((resolve) => setTimeout(resolve, 30)); // bits-ui debounces the check by 10 ms
+		await fireEvent.click(outside, { clientX: 1, clientY: 1 });
+
+		await waitFor(() => expect(video.classList.contains('pointer-events-none')).toBe(false));
+	});
+
 	it('offers Remove from album only when it is given', async () => {
 		const onremovefromalbum = vi.fn();
 		render(MediaLightbox, {
