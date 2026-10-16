@@ -4,7 +4,9 @@ import { CLIENT_IP_HEADER } from '#lib/server/client-ip.js';
 import { EMAIL_VERIFICATION, RATE_LIMIT } from '#lib/server/email-verification.js';
 
 vi.mock('$app/server', () => ({ getRequestEvent: vi.fn() }));
-vi.mock('#lib/server/db.js', () => ({ prisma: {} }));
+vi.mock('#lib/server/db.js', () => ({ prismaBase: {} }));
+
+const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 describe('auth', () => {
 	it('uses the configured secret and enables email and password sign-in', async () => {
@@ -65,6 +67,14 @@ describe('auth', () => {
 		expect(auth.options.emailVerification).toEqual(EMAIL_VERIFICATION);
 		expect(auth.options.rateLimit).toEqual(RATE_LIMIT);
 		expect(auth.options.advanced?.ipAddress?.ipAddressHeaders).toEqual([CLIENT_IP_HEADER]);
+	});
+
+	it('generates every Better Auth row id as a UUID v7', async () => {
+		const { auth } = await import('#lib/server/auth.js');
+		const generateId = auth.options.advanced?.database?.generateId as () => string;
+
+		expect(generateId()).toMatch(UUID_V7);
+		expect(generateId()).not.toBe(generateId());
 	});
 
 	it('trusts the origin of the request itself, so the plugin mail send passes the origin check', async () => {

@@ -64,6 +64,15 @@ describe('summarySelect', () => {
 	});
 });
 
+describe('summarySelect', () => {
+	it('leaves soft-deleted media out of the previews and the count', () => {
+		const live = { media: { status: 'READY', deletedAt: null } };
+
+		expect(summarySelect.media.where).toEqual(live);
+		expect(summarySelect._count.select.media.where).toEqual(live);
+	});
+});
+
 describe('toSummary', () => {
 	it('lists the cover first, then the first items, and counts the READY items', () => {
 		const summary = toSummary(
@@ -103,6 +112,17 @@ describe('toSummary', () => {
 		const summary = toSummary(
 			albumRow({
 				cover: { id: 'x', kind: 'IMAGE', hasThumb: true, status: 'PENDING' },
+				media: [link('a')]
+			}) as never
+		);
+
+		expect(summary.previews.map((p) => p.id)).toEqual(['a']);
+	});
+
+	it('skips a cover that was soft-deleted', () => {
+		const summary = toSummary(
+			albumRow({
+				cover: { id: 'x', kind: 'IMAGE', hasThumb: true, status: 'READY', deletedAt: new Date() },
 				media: [link('a')]
 			}) as never
 		);

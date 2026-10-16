@@ -1,7 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { checkMedia, THUMB_TYPE } from '#lib/media/types.js';
 import type { UploadTicket } from '#lib/media/types.js';
-import { prisma } from '#lib/server/db.js';
+import { prisma, prismaBase } from '#lib/server/db.js';
 import {
 	decodeCursor,
 	listMedia,
@@ -28,7 +28,7 @@ async function purgeStale(userId: string) {
 	});
 	if (!stale.length) return;
 	await remove(...stale.flatMap((m) => [originalKey(m), thumbKey(m)]));
-	await prisma.media.deleteMany({ where: { id: { in: stale.map((m) => m.id) } } });
+	await prismaBase.media.deleteMany({ where: { id: { in: stale.map((m) => m.id) } } });
 }
 
 export const GET: RequestHandler = async ({ locals, url }) => {

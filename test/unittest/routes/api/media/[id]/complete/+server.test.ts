@@ -3,13 +3,15 @@ import { POST } from '../../../../../../../src/routes/api/media/[id]/complete/+s
 import { mediaRow } from '../../../../../helpers/media.js';
 
 const db = vi.hoisted(() => ({
-	media: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
+	media: { findFirst: vi.fn(), update: vi.fn() },
 	album: { findFirst: vi.fn(), update: vi.fn() },
 	albumMedia: { create: vi.fn() },
 	$transaction: vi.fn()
 }));
 const storage = vi.hoisted(() => ({ head: vi.fn(), remove: vi.fn() }));
-vi.mock('#lib/server/db.js', () => ({ prisma: db }));
+// A mismatched upload is hard-deleted (it was never visible), so it goes through prismaBase.
+const base = vi.hoisted(() => ({ media: { delete: vi.fn() } }));
+vi.mock('#lib/server/db.js', () => ({ prisma: db, prismaBase: base }));
 vi.mock('#lib/server/storage.js', () => storage);
 
 type Ev = Parameters<typeof POST>[0];
@@ -41,7 +43,7 @@ beforeEach(() => {
 		.mockImplementation(async ({ data }: { data: object }) =>
 			mediaRow({ status: 'READY', ...data })
 		);
-	db.media.delete.mockReset().mockResolvedValue(mediaRow());
+	base.media.delete.mockReset().mockResolvedValue(mediaRow());
 	storage.remove.mockReset().mockResolvedValue(undefined);
 	db.album.findFirst.mockReset().mockResolvedValue({ id: 'a1' });
 	db.album.update.mockReset().mockResolvedValue({});
@@ -89,9 +91,9 @@ describe('POST /api/media/:id/complete', () => {
 			body: { message: 'The uploaded file does not match its declared size' }
 		});
 		expect(storage.remove).toHaveBeenCalledWith('u1/m1/original', 'u1/m1/thumb');
-		expect(db.media.delete).toHaveBeenCalledWith({ where: { id: 'm1' } });
+		expect(base.media.delete).toHaveBeenCalledWith({ where: { id: 'm1' } });
 		expect(storage.remove.mock.invocationCallOrder[0]).toBeLessThan(
-			db.media.delete.mock.invocationCallOrder[0]
+			base.media.delete.mock.invocationCallOrder[0]
 		);
 		expect(db.media.update).not.toHaveBeenCalled();
 	});

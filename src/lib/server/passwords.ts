@@ -49,7 +49,7 @@ export async function revealPassword(userId: string, id: string): Promise<string
 	return row?.password ?? null;
 }
 
-/** false when not found / not owned. */
+/** Soft-deletes the entry. false when not found / not owned. */
 export async function deletePassword(userId: string, id: string): Promise<boolean> {
 	const { count } = await prisma.password.deleteMany({ where: { id, userId } });
 	return count > 0;

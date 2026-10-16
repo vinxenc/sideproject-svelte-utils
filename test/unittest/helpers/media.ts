@@ -33,6 +33,7 @@ export function mediaRow(overrides: Partial<Media> = {}): Media {
 		hasThumb: true,
 		createdAt: new Date('2024-05-01T10:00:00.000Z'),
 		updatedAt: new Date('2024-05-01T10:00:00.000Z'),
+		deletedAt: null,
 		...overrides
 	};
 }
