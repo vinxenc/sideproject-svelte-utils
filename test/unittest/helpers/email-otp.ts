@@ -1,4 +1,5 @@
 import { APIError } from 'better-auth/api';
+import { v7 as uuidv7 } from 'uuid';
 import { otpIdentifier, OTP_ALLOWED_ATTEMPTS, OTP_EXPIRES_SECONDS } from '#lib/server/email-otp.js';
 import type { EmailOtpApi, EmailOtpStore } from '#lib/server/email-otp.js';
 import type { MailMessage } from '#lib/server/mail/mailer.js';
@@ -58,7 +59,7 @@ export function fakeEngine(opts: { code?: () => string } = {}): {
 			const code = nextCode();
 			const now = new Date();
 			rows.push({
-				id: crypto.randomUUID(),
+				id: uuidv7(),
 				identifier: otpIdentifier(email),
 				value: `${code}:0`,
 				expiresAt: new Date(now.getTime() + OTP_EXPIRES_SECONDS * 1000),

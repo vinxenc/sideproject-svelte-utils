@@ -1,5 +1,5 @@
 import { error, json } from '@sveltejs/kit';
-import { prisma } from '#lib/server/db.js';
+import { prisma, prismaBase } from '#lib/server/db.js';
 import { MAX_THUMB_BYTES, NO_STORE, originalKey, thumbKey, toItem } from '#lib/server/media.js';
 import type { Media } from '#lib/server/prisma/client.js';
 import { head, remove } from '#lib/server/storage.js';
@@ -19,7 +19,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 	if (original.size !== media.size) {
 		// The signed upload URL makes the storage refuse any other length; this catches a store that doesn't.
 		await remove(originalKey(media), thumbKey(media));
-		await prisma.media.delete({ where: { id: media.id } });
+		await prismaBase.media.delete({ where: { id: media.id } });
 		error(422, 'The uploaded file does not match its declared size');
 	}
 

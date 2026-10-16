@@ -3,13 +3,15 @@ import { GET, POST } from '../../../../../src/routes/api/media/+server.js';
 import { mediaRow } from '../../../helpers/media.js';
 
 const db = vi.hoisted(() => ({
-	media: { findMany: vi.fn(), deleteMany: vi.fn(), create: vi.fn() }
+	media: { findMany: vi.fn(), create: vi.fn() }
 }));
 const storage = vi.hoisted(() => ({
 	presignPut: vi.fn(),
 	remove: vi.fn()
 }));
-vi.mock('#lib/server/db.js', () => ({ prisma: db }));
+// Purging stale uploads must hard-delete, so it goes through prismaBase, not the soft-deleting client.
+const base = vi.hoisted(() => ({ media: { deleteMany: vi.fn() } }));
+vi.mock('#lib/server/db.js', () => ({ prisma: db, prismaBase: base }));
 vi.mock('#lib/server/storage.js', () => storage);
 
 type Ev = Parameters<typeof GET>[0];
@@ -49,7 +51,7 @@ function createdData() {
 beforeEach(() => {
 	vi.useFakeTimers({ now: NOW });
 	db.media.findMany.mockReset().mockResolvedValue([]);
-	db.media.deleteMany.mockReset().mockResolvedValue({ count: 0 });
+	base.media.deleteMany.mockReset().mockResolvedValue({ count: 0 });
 	db.media.create.mockReset().mockResolvedValue(mediaRow({ id: 'm1' }));
 	storage.presignPut
 		.mockReset()
@@ -89,7 +91,7 @@ describe('GET /api/media', () => {
 			take: 61
 		});
 		expect(storage.remove).not.toHaveBeenCalled();
-		expect(db.media.deleteMany).not.toHaveBeenCalled();
+		expect(base.media.deleteMany).not.toHaveBeenCalled();
 		expect(await res.json()).toEqual({ items: [], nextCursor: null });
 		expect(res.headers.get('cache-control')).toBe('private, no-store');
 	});
@@ -110,11 +112,11 @@ describe('GET /api/media', () => {
 			'u1/s2/original',
 			'u1/s2/thumb'
 		);
-		expect(db.media.deleteMany).toHaveBeenCalledWith({
+		expect(base.media.deleteMany).toHaveBeenCalledWith({
 			where: { id: { in: ['s1', 's2'] } }
 		});
 		const removeOrder = storage.remove.mock.invocationCallOrder[0];
-		const deleteOrder = db.media.deleteMany.mock.invocationCallOrder[0];
+		const deleteOrder = base.media.deleteMany.mock.invocationCallOrder[0];
 		expect(removeOrder).toBeLessThan(deleteOrder);
 	});
 
@@ -127,7 +129,7 @@ describe('GET /api/media', () => {
 
 		expect(res.status).toBe(200);
 		expect(spy).toHaveBeenCalledWith('Purging stale uploads failed', expect.any(Error));
-		expect(db.media.deleteMany).not.toHaveBeenCalled();
+		expect(base.media.deleteMany).not.toHaveBeenCalled();
 	});
 
 	it('pages from a valid cursor without purging, and URL-encodes it', async () => {

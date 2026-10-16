@@ -15,15 +15,15 @@ export const summarySelect = {
 	name: true,
 	createdAt: true,
 	updatedAt: true,
-	cover: { select: { id: true, kind: true, hasThumb: true, status: true } },
+	cover: { select: { id: true, kind: true, hasThumb: true, status: true, deletedAt: true } },
 	media: {
-		where: { media: { status: 'READY' } },
+		where: { media: { status: 'READY', deletedAt: null } },
 		// First added first: the cover falls back to the first added item (amendment Q4).
 		orderBy: [{ addedAt: 'asc' }, { mediaId: 'asc' }],
 		take: PREVIEW_COUNT,
 		select: { media: { select: { id: true, kind: true, hasThumb: true } } }
 	},
-	_count: { select: { media: { where: { media: { status: 'READY' } } } } }
+	_count: { select: { media: { where: { media: { status: 'READY', deletedAt: null } } } } }
 } satisfies Prisma.AlbumSelect;
 type SummaryRow = Prisma.AlbumGetPayload<{ select: typeof summarySelect }>;
 
@@ -32,7 +32,7 @@ type SummaryRow = Prisma.AlbumGetPayload<{ select: typeof summarySelect }>;
  * With no cover set, the first-added item leads the stack.
  */
 export function toSummary(row: SummaryRow): AlbumSummary {
-	const cover = row.cover?.status === 'READY' ? row.cover : null;
+	const cover = row.cover?.status === 'READY' && !row.cover.deletedAt ? row.cover : null;
 	const others = row.media.map((link) => link.media).filter((m) => m.id !== cover?.id);
 	const picks = cover ? [cover, ...others] : others;
 	return {
@@ -111,7 +111,7 @@ export async function createAlbum(userId: string, name: string): Promise<AlbumSu
 	return toSummary(row);
 }
 
-/** false when not found / not owned. */
+/** Soft-deletes the album. false when not found / not owned. */
 export async function deleteAlbum(userId: string, id: string): Promise<boolean> {
 	const { count } = await prisma.album.deleteMany({ where: { id, userId } });
 	return count > 0;

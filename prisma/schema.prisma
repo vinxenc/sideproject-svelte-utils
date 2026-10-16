@@ -113,7 +113,7 @@ enum MediaStatus {
 // A photo or video. The bytes live in object storage under `<userId>/<id>/original` and
 // `<userId>/<id>/thumb` (see src/lib/server/media.ts).
 model Media {
-  id          String       @id @default(uuid())
+  id          String       @id @default(uuid(7))
   userId      String
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind        MediaKind
@@ -131,6 +131,8 @@ model Media {
   hasThumb    Boolean      @default(false)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @default(now()) @updatedAt
+  // Soft delete: set instead of removing the row (see src/lib/server/soft-delete.ts).
+  deletedAt   DateTime?
   albums      AlbumMedia[]
   coverOf     Album[]      @relation("AlbumCover")
 
@@ -140,7 +142,7 @@ model Media {
 }
 
 model Album {
-  id        String       @id @default(uuid())
+  id        String       @id @default(uuid(7))
   userId    String
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
@@ -150,6 +152,8 @@ model Album {
   cover     Media?       @relation("AlbumCover", fields: [coverId], references: [id], onDelete: SetNull)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @default(now()) @updatedAt
+  // Soft delete: set instead of removing the row (see src/lib/server/soft-delete.ts).
+  deletedAt DateTime?
   media     AlbumMedia[]
 
   // The album list: one user's albums, most recently changed first, paged by (updatedAt, id).
@@ -181,7 +185,7 @@ enum PasswordType {
 // A stored credential. Phase 1 keeps `password` as plain text; phase 2 encrypts it.
 // The list never selects it: it is only read by the reveal endpoint.
 model Password {
-  id        String       @id @default(uuid())
+  id        String       @id @default(uuid(7))
   userId    String
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
@@ -189,6 +193,8 @@ model Password {
   password  String
   type      PasswordType
   createdAt DateTime     @default(now())
+  // Soft delete: set instead of removing the row (see src/lib/server/soft-delete.ts).
+  deletedAt DateTime?
 
   // The list: one user's items, newest first.
   @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
