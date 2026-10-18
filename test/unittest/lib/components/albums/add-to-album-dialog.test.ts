@@ -73,6 +73,15 @@ describe('AddToAlbumDialog listing', () => {
 		expect(screen.queryByText('Home')).toBeNull();
 	});
 
+	it('puts the cursor in the Name field when the New album form opens', async () => {
+		serve([trip]);
+		render(AddToAlbumDialog, { props: { open: true, mediaIds: ['m1'] } });
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'New album' }));
+
+		await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Name')));
+	});
+
 	it('says there are no albums yet, and still offers New album', async () => {
 		serve([]);
 		render(AddToAlbumDialog, { props: { open: true, mediaIds: ['m1'], onadded: vi.fn() } });

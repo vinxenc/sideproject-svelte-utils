@@ -3,11 +3,18 @@ import { createRawSnippet, flushSync } from 'svelte';
 import { toast } from 'svelte-sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Gallery from '#lib/components/media/gallery.svelte';
+import { MAX_ITEMS_PER_REQUEST } from '#lib/albums/types.js';
 import { uploads } from '#lib/media/uploads.svelte.js';
 import type { MediaItem, MediaPage } from '#lib/media/types.js';
 import { FakeIntersectionObserver, intersect } from '../../../helpers/dom.js';
 import { albumSummary } from '../../../helpers/albums.js';
 import { deferred, mediaItem } from '../../../helpers/media.js';
+
+// A small cap, so the chunked delete is tested with a handful of tiles instead of 501 (slow on CI).
+vi.mock('#lib/albums/types.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/albums/types.js')>()),
+	MAX_ITEMS_PER_REQUEST: 3
+}));
 
 vi.mock('svelte-sonner', () => ({
 	toast: { error: vi.fn(), dismiss: vi.fn(), success: vi.fn(), info: vi.fn() }
@@ -242,6 +249,10 @@ describe('Gallery lightbox', () => {
 		expect(
 			lightbox.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
+
+		// The arrow keys stay off the viewer behind the picker: it must not move off the item being added.
+		await fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+		expect(screen.getByRole('heading', { name: 'b.jpg' })).toBeTruthy();
 	});
 });
 
@@ -261,7 +272,7 @@ describe('Gallery delete from the lightbox', () => {
 	it('deletes the item, drops it from the grid and moves the viewer to the next one', async () => {
 		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
 			init?.method === 'DELETE'
-				? new Response(null, { status: 204 })
+				? json({ deleted: 1 })
 				: json({ items: [a, b, c], nextCursor: null })
 		);
 		const onalbumschanged = vi.fn();
@@ -271,7 +282,11 @@ describe('Gallery delete from the lightbox', () => {
 		await openDelete();
 
 		await waitFor(() => expect(tileNames(container)).toEqual(['a.jpg', 'c.jpg']));
-		expect(fetchMock).toHaveBeenCalledWith('/api/media/b', { method: 'DELETE' });
+		expect(fetchMock).toHaveBeenCalledWith('/api/media', {
+			method: 'DELETE',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ mediaIds: ['b'] })
+		});
 		expect(toast.success).toHaveBeenCalledWith('Deleted');
 		expect(onalbumschanged).toHaveBeenCalled();
 		expect(await screen.findByRole('heading', { name: 'c.jpg' })).toBeTruthy();
@@ -292,6 +307,18 @@ describe('Gallery delete from the lightbox', () => {
 			expect(toast.error).toHaveBeenCalledWith("Couldn't delete", { description: 'Not found' })
 		);
 		expect(tileNames(container)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+	});
+	it('closes the viewer when the only item it shows is deleted', async () => {
+		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+			init?.method === 'DELETE' ? json({ deleted: 1 }) : json({ items: [b], nextCursor: null })
+		);
+		const { container } = render(Gallery);
+		await screen.findByTitle('b.jpg');
+
+		await openDelete();
+
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+		expect(tileNames(container)).toEqual([]);
 	});
 });
 
@@ -500,5 +527,203 @@ describe('Gallery select mode', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
 		expect(await screen.findByRole('heading', { name: 'c.jpg' })).toBeTruthy();
+	});
+});
+
+describe('Gallery bulk delete', () => {
+	/** Taps the circle on each named tile, which starts select mode and then toggles. */
+	async function select(...names: string[]) {
+		for (const name of names)
+			await fireEvent.click(screen.getByRole('button', { name: `Select ${name}` }));
+	}
+
+	/** Opens the confirmation for the current selection and confirms it. */
+	async function deleteSelected() {
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+		await screen.findByText(/^Delete \d+ items?\?$/);
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+	}
+
+	const deletes = () =>
+		fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([url]) => url);
+
+	it('opens a confirmation for the selection, and Cancel deletes nothing and keeps both selected', async () => {
+		servePages({ '': { items: [a, b, c], nextCursor: null } });
+		await renderGallery();
+		await select('a.jpg', 'b.jpg');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+
+		expect(await screen.findByText('Delete 2 items?')).toBeTruthy();
+		expect(screen.getByText('They leave your library and every album.')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+		await waitFor(() => expect(screen.queryByText('Delete 2 items?')).toBeNull());
+		expect(deletes()).toEqual([]);
+		expect(screen.getByText('2 selected')).toBeTruthy();
+	});
+
+	it('says "It leaves" for a single item', async () => {
+		servePages({ '': { items: [a, b, c], nextCursor: null } });
+		await renderGallery();
+		await select('a.jpg');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+
+		expect(await screen.findByText('Delete 1 item?')).toBeTruthy();
+		expect(screen.getByText('It leaves your library and every album.')).toBeTruthy();
+	});
+
+	it('sends the whole selection in one request, drops it from the grid and the selection, and reports the count', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ deleted: 2 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() => expect(tileNames(container)).toEqual(['c.jpg']));
+		expect(fetchMock).toHaveBeenCalledWith('/api/media', {
+			method: 'DELETE',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ mediaIds: ['a', 'b'] })
+		});
+		expect(deletes()).toEqual(['/api/media']);
+		await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull());
+		expect(toast.success).toHaveBeenCalledWith('Deleted 2 items');
+		expect(onalbumschanged).toHaveBeenCalledTimes(1);
+	});
+
+	it('reports the count the server deleted, when it is fewer than the selection', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ deleted: 1 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		render(Gallery);
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted 1 item'));
+	});
+
+	it('drops ids the server no longer counts, without a toast or an album refresh', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ deleted: 0 })
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() => expect(tileNames(container)).toEqual(['c.jpg']));
+		await waitFor(() => expect(screen.queryByText('2 selected')).toBeNull());
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(onalbumschanged).not.toHaveBeenCalled();
+	});
+
+	it('keeps everything selected and shows one error when the request fails', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE'
+				? json({ message: 'Not found' }, 404)
+				: json({ items: [a, b, c], nextCursor: null })
+		);
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg', 'b.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete 2 items", {
+				description: 'Not found'
+			})
+		);
+		expect(tileNames(container)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+		expect(screen.getByText('2 selected')).toBeTruthy();
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(onalbumschanged).not.toHaveBeenCalled();
+	});
+
+	it('takes out the first batch when a later one fails, and keeps the rest selected', async () => {
+		const many = Array.from({ length: MAX_ITEMS_PER_REQUEST + 1 }, (_, i) =>
+			mediaItem({
+				id: `m${i}`,
+				name: `m${i}.jpg`,
+				takenAt: new Date(Date.UTC(2024, 0, 1) - i * 60_000).toISOString()
+			})
+		);
+		let deleteCalls = 0;
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+			if (init?.method !== 'DELETE') return json({ items: many, nextCursor: null });
+			deleteCalls += 1;
+			return deleteCalls === 1
+				? json({ deleted: MAX_ITEMS_PER_REQUEST })
+				: json({ message: 'Not found' }, 404);
+		});
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('m0.jpg');
+		for (const button of container.querySelectorAll<HTMLButtonElement>(
+			'button[aria-label^="Select "]'
+		))
+			await fireEvent.click(button);
+
+		await deleteSelected();
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete 1 item", {
+				description: 'Not found'
+			})
+		);
+		expect(deletes()).toHaveLength(2);
+		expect(tileNames(container)).toEqual([`m${MAX_ITEMS_PER_REQUEST}.jpg`]);
+		expect(screen.getByText('1 selected')).toBeTruthy();
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(onalbumschanged).toHaveBeenCalledTimes(1);
+	});
+
+	it('describes a failure that is not an Error with a generic message', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+			if (init?.method === 'DELETE') throw 'x';
+			return json({ items: [a, b], nextCursor: null });
+		});
+		render(Gallery);
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg');
+
+		await deleteSelected();
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete 1 item", {
+				description: 'Something went wrong'
+			})
+		);
+	});
+
+	it('inside an album, deletes from the library and keeps Remove beside Delete', async () => {
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+			init?.method === 'DELETE' ? json({ deleted: 1 }) : json({ items: [a], nextCursor: null })
+		);
+		render(Gallery, { props: { album: { id: 'a1', name: 'Trip' } } });
+		await screen.findByTitle('a.jpg');
+		await select('a.jpg');
+
+		expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+		await deleteSelected();
+
+		await waitFor(() => expect(deletes()).toEqual(['/api/media']));
+		expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/items'))).toBe(false);
 	});
 });

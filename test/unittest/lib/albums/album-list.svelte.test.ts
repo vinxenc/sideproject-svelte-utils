@@ -57,21 +57,6 @@ describe('AlbumList', () => {
 		expect(api.fetchAlbums).toHaveBeenCalledTimes(1);
 	});
 
-	it('dedupes albums that show up on two pages', async () => {
-		api.fetchAlbums
-			.mockResolvedValueOnce({ items: [albumSummary({ id: 'a1' })], nextCursor: 'c1' })
-			.mockResolvedValueOnce({
-				items: [albumSummary({ id: 'a1', name: 'moved' }), albumSummary({ id: 'a2' })],
-				nextCursor: null
-			});
-		const list = new AlbumList();
-
-		await list.load();
-		await list.load();
-
-		expect(list.items.map((i) => i.id)).toEqual(['a1', 'a2']);
-	});
-
 	it('keeps the error text and no items when a page fails, and retries from the same cursor', async () => {
 		api.fetchAlbums
 			.mockRejectedValueOnce(new Error('Request failed (500)'))

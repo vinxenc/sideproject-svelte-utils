@@ -72,7 +72,7 @@
 				)}
 			></span>
 			<span class="sr-only">
-				{mode === 'photo' ? 'Take photo' : camera.recording ? 'Stop recording' : 'Start recording'}
+				{camera.recording ? 'Stop recording' : mode === 'photo' ? 'Take photo' : 'Start recording'}
 			</span>
 		</button>
 

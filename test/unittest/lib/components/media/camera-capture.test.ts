@@ -130,6 +130,28 @@ describe('CameraCapture video', () => {
 
 		expect(screen.getByRole('button', { name: 'Take photo' })).toBeTruthy();
 	});
+
+	it('names the shutter Stop recording when Photo was picked during the microphone prompt', async () => {
+		let grantSound!: (stream: FakeStream) => void;
+		const getUserMedia = vi.fn((constraints: MediaStreamConstraints) =>
+			constraints.audio
+				? new Promise<FakeStream>((resolve) => (grantSound = resolve))
+				: Promise.resolve(new FakeStream([new FakeTrack('video')]))
+		);
+		installMediaDevices(getUserMedia);
+		render(CameraCapture, { oncapture, onclose });
+		await flushMicrotasks();
+		await fireEvent.click(screen.getByRole('button', { name: 'Video' }));
+		await fireEvent.click(shutter());
+		await fireEvent.click(screen.getByRole('button', { name: 'Photo' }));
+
+		grantSound(new FakeStream([new FakeTrack('audio')]));
+		await flushMicrotasks();
+		flushSync();
+
+		expect(screen.getByRole('button', { name: 'Stop recording' })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Take photo' })).toBeNull();
+	});
 });
 
 describe('CameraCapture done', () => {

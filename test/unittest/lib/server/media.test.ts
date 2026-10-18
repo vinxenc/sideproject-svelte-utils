@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	decodeCursor,
+	deleteMediaItems,
 	encodeCursor,
 	listMedia,
 	MAX_THUMB_BYTES,
@@ -13,7 +14,7 @@ import {
 import { mediaRow } from '../../helpers/media.js';
 import { thrown } from '../../helpers/thrown.js';
 
-const db = vi.hoisted(() => ({ media: { findMany: vi.fn() } }));
+const db = vi.hoisted(() => ({ media: { findMany: vi.fn(), deleteMany: vi.fn() } }));
 vi.mock('#lib/server/db.js', () => ({ prisma: db }));
 
 describe('media helpers', () => {
@@ -134,5 +135,24 @@ describe('listMedia', () => {
 		expect(page.items).toHaveLength(MEDIA_PAGE_SIZE);
 		const last = rows[MEDIA_PAGE_SIZE - 1];
 		expect(page.nextCursor).toBe(encodeCursor(last.takenAt, last.id));
+	});
+});
+
+describe('deleteMediaItems', () => {
+	beforeEach(() => {
+		db.media.deleteMany.mockReset().mockResolvedValue({ count: 2 });
+	});
+
+	it("soft-deletes only the caller's READY items among the ids, and returns the count", async () => {
+		expect(await deleteMediaItems('u1', ['m1', 'm2'])).toBe(2);
+		expect(db.media.deleteMany).toHaveBeenCalledWith({
+			where: { id: { in: ['m1', 'm2'] }, userId: 'u1', status: 'READY' }
+		});
+	});
+
+	it('counts nothing for ids that are not deletable, without failing', async () => {
+		db.media.deleteMany.mockResolvedValue({ count: 0 });
+
+		expect(await deleteMediaItems('u1', ['theirs', 'pending'])).toBe(0);
 	});
 });

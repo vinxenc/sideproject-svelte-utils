@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GET, POST } from '../../../../../src/routes/api/media/+server.js';
+import { DELETE, GET, POST } from '../../../../../src/routes/api/media/+server.js';
 import { mediaRow } from '../../../helpers/media.js';
 
 const db = vi.hoisted(() => ({
-	media: { findMany: vi.fn(), create: vi.fn() }
+	media: { findMany: vi.fn(), create: vi.fn(), deleteMany: vi.fn() }
 }));
 const storage = vi.hoisted(() => ({
 	presignPut: vi.fn(),
@@ -38,6 +38,16 @@ function postEvent(body: unknown, user: { id: string } | null = { id: 'u1' }): E
 	} as unknown as Ev;
 }
 
+function deleteEvent(body: unknown, user: { id: string } | null = { id: 'u1' }): Ev {
+	const raw = typeof body === 'string' ? body : JSON.stringify(body);
+	return {
+		locals: { user },
+		url: new URL('http://localhost/api/media'),
+		params: {},
+		request: new Request('http://localhost/api/media', { method: 'DELETE', body: raw })
+	} as unknown as Ev;
+}
+
 /** A valid upload announcement, with overrides. */
 function announce(overrides: Record<string, unknown> = {}) {
 	return { name: 'beach.jpg', type: 'image/jpeg', size: 1234, ...overrides };
@@ -53,6 +63,7 @@ beforeEach(() => {
 	db.media.findMany.mockReset().mockResolvedValue([]);
 	base.media.deleteMany.mockReset().mockResolvedValue({ count: 0 });
 	db.media.create.mockReset().mockResolvedValue(mediaRow({ id: 'm1' }));
+	db.media.deleteMany.mockReset().mockResolvedValue({ count: 2 });
 	storage.presignPut
 		.mockReset()
 		.mockImplementation(async (key: string) => `https://s3.test/${key}?put`);
@@ -400,5 +411,57 @@ describe('POST /api/media', () => {
 		await POST(postEvent(announce({ thumb: 2 * 1024 * 1024 })));
 
 		expect(storage.presignPut).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe('DELETE /api/media', () => {
+	it('rejects signed-out callers with 401', async () => {
+		await expect(DELETE(deleteEvent({ mediaIds: ['m1'] }, null))).rejects.toMatchObject({
+			status: 401
+		});
+		expect(db.media.deleteMany).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['a body that is not an object', 'nope', 'Invalid request'],
+		['no mediaIds array', {}, 'Invalid media ids'],
+		['an id that is not a string', { mediaIds: [1] }, 'Invalid media ids'],
+		['an empty list', { mediaIds: [] }, 'No media ids']
+	])('answers 400 for %s', async (_, body, message) => {
+		await expect(DELETE(deleteEvent(body))).rejects.toMatchObject({
+			status: 400,
+			body: { message }
+		});
+		expect(db.media.deleteMany).not.toHaveBeenCalled();
+	});
+
+	it('answers 400 for more than 500 distinct ids', async () => {
+		const mediaIds = Array.from({ length: 501 }, (_, i) => `m${i}`);
+
+		await expect(DELETE(deleteEvent({ mediaIds }))).rejects.toMatchObject({
+			status: 400,
+			body: { message: 'Too many items (500 at most)' }
+		});
+		expect(db.media.deleteMany).not.toHaveBeenCalled();
+	});
+
+	it("soft-deletes only the caller's READY items among the ids, answers the count, uncached", async () => {
+		const res = await DELETE(deleteEvent({ mediaIds: ['m1', 'm2', 'm1'] }));
+
+		expect(db.media.deleteMany).toHaveBeenCalledWith({
+			where: { id: { in: ['m1', 'm2'] }, userId: 'u1', status: 'READY' }
+		});
+		expect(res.status).toBe(200);
+		expect(res.headers.get('cache-control')).toBe('private, no-store');
+		expect(await res.json()).toEqual({ deleted: 2 });
+	});
+
+	it('answers 200 with a count of 0 for ids that are not deletable, rather than 404', async () => {
+		db.media.deleteMany.mockResolvedValue({ count: 0 });
+
+		const res = await DELETE(deleteEvent({ mediaIds: ['theirs'] }));
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ deleted: 0 });
 	});
 });

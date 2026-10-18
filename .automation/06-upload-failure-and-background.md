@@ -4,6 +4,13 @@ How the dialog and the app behave when an upload fails, when the dialog is hidde
 
 **Needs for the whole file:** SET-01 to SET-07, the QA account signed in, the browser on `Photo & video`. Use small solid-colour PNGs (a few bytes each) for every upload here. Arm the toast observer before each case and restore `fetch` / `XMLHttpRequest` at the end of each case (see Techniques in [01-test-data.md](01-test-data.md)).
 
+Run notes (found on the first run, 2026-10-18, built-in pane):
+
+- A tool call takes about 1 to 3 seconds, so a `complete` that waits 2 to 3 seconds is over before a real click can land. Where a click has to arrive while the request is pending (`Hide`, `Home`, `Sign out`), make `complete` wait 6 to 9 seconds instead of the 2 to 3 written below, and put the failing rule on the second call only (a rule that waits for every call and a rule that fails the nth call can coexist; count the calls before waiting).
+- The footer button that hides the dialog while uploading is named `Hide` (it replaces `Cancel`). The round button then has no `aria-label`: its accessible name is its visually hidden text, `Uploading photos and videos` (spinner) or `Add photos and videos`.
+- In a hidden pane the dialog's exit animation keeps an overlay over the page for a moment: a click on the sidebar right after `Hide` or Escape is swallowed. Take a screenshot (wakes the pane) and click again. A success toast can also stay up for much longer than 4 seconds there and covers the round button: open the dialog with the button's own `click()` in that case. Record toasts by element (a second `Added 1 item to the gallery` has the same text as the first).
+- The dialog is modal: `Home` and `Sign out` cannot be clicked while it is open. Escape closes the dialog and, with no upload running, clears a selection (`uploads.close()` resets the rows), so BG-06 and BG-07 do not test cleanup during navigation or sign-out with a selection still held: they check that nothing is left over afterwards.
+
 What the outcome toasts look like:
 
 | Outcome                     | Toast                                                                                                                                                      |
@@ -73,17 +80,17 @@ What the outcome toasts look like:
 - On `Home` a toast `1 upload failed` with the description `1 added to the gallery` and **no `Review` button** (there is no dialog to review in).
 - Back on `Photo & video`: only the successful item is new; the failed file is not kept: the dialog opens empty and the round button is idle.
 
-## BG-06 Leave the page with only a selection
+## BG-06 Clear a selection before leaving the page
 
-**Steps:** open the dialog, choose a PNG (do not submit), click `Home`, then `Photo & video`, then open the dialog.
+**Steps:** open the dialog, choose a PNG (do not submit), press Escape to close the dialog and clear the selection, click `Home`, then `Photo & video`, then open the dialog.
 
 **Expected:** the dialog was gone while on `Home`; after returning it is closed, and when opened shows no cards with a disabled `Submit`.
 
-## BG-07 Sign out with a selection
+## BG-07 Clear a selection before signing out
 
 **Steps**
 
-1. Open the dialog and choose two PNGs (do not submit).
+1. Open the dialog, choose two PNGs (do not submit) and press Escape (the dialog is modal and would cover the sidebar; Escape clears the selection).
 2. Click `Sign out` in the sidebar footer. Wait for `/sign-in`.
 3. Sign back in as the same QA user **without a full page load**: call `POST /api/auth/sign-in/email` from the page, then go to `/dashboard` through a client-side link (for example add `<a href="/dashboard">` to the page and click it). A `navigate` or reload starts a fresh page and would prove nothing.
 4. Open `Photo & video` and the dialog.

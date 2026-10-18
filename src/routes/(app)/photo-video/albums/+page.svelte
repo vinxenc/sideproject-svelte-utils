@@ -62,7 +62,7 @@
 
 	{#if !list.loaded}
 		<div
-			class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-x-16 sm:gap-y-24 lg:grid-cols-4 xl:grid-cols-5"
+			class="grid grid-cols-2 gap-x-4 gap-y-6 ps-4 sm:grid-cols-3 sm:gap-x-16 sm:gap-y-24 sm:ps-6 lg:grid-cols-4 xl:grid-cols-5"
 		>
 			{#each Array.from({ length: 10 }, (_, i) => i) as i (i)}
 				<div>
@@ -89,7 +89,7 @@
 		/>
 	{:else}
 		<div
-			class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-x-16 sm:gap-y-24 lg:grid-cols-4 xl:grid-cols-5"
+			class="grid grid-cols-2 gap-x-4 gap-y-6 ps-4 sm:grid-cols-3 sm:gap-x-16 sm:gap-y-24 sm:ps-6 lg:grid-cols-4 xl:grid-cols-5"
 		>
 			{#each list.items as album (album.id)}
 				<AlbumCard {album} />

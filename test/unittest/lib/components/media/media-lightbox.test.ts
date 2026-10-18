@@ -466,6 +466,33 @@ describe('MediaLightbox delete', () => {
 		expect(ondelete).not.toHaveBeenCalled();
 	});
 
+	it('keeps the arrow keys off the viewer while the confirmation is open', async () => {
+		withDelete();
+		await openMenu();
+		await fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+		await screen.findByRole('alertdialog');
+
+		// From the page, as in the moment before the dialog takes focus.
+		await key('ArrowRight');
+
+		expect(screen.getByRole('alertdialog').textContent).toContain('b.mp4');
+		expect(screen.getByRole('alertdialog').textContent).not.toContain('c.jpg');
+	});
+
+	it('keeps the arrow keys off the viewer while keysPaused is set', async () => {
+		render(MediaLightbox, {
+			items: three,
+			openId: 'b',
+			hasMore: false,
+			onloadmore: vi.fn(),
+			keysPaused: true
+		} as never);
+
+		await key('ArrowRight');
+
+		expect(screen.getByRole('heading', { name: 'b.mp4' })).toBeTruthy();
+	});
+
 	it('cannot be dismissed while the delete is in flight', async () => {
 		const pending = deferred<void>();
 		const ondelete = withDelete(vi.fn(() => pending.promise));
