@@ -1,8 +1,8 @@
 # 02 · API contract (`/api/media`)
 
-The HTTP contract behind the gallery. These cases need no page interaction. File bytes go straight to the storage origin with presigned URLs, so a plain HTTP client can upload them too.
+The HTTP contract behind the gallery's library: uploads, listing, files and delete. The album endpoints are in [14-albums-api.md](14-albums-api.md), the password vault's in [15-passwords.md](15-passwords.md); both reuse the two accounts made here. These cases need no page interaction. File bytes go straight to the storage origin with presigned URLs, so a plain HTTP client can upload them too.
 
-**Needs:** SET-01 to SET-04 (the preview is running). Use **two QA accounts created just for this file**, account A and account B, each driven by a plain HTTP client with its own cookie jar (sign up with `POST /api/auth/sign-up/email`, which also signs that client in; send an `Origin: http://localhost:4173` header). Do **not** use the browser or the account from SET-06 here: these cases leave media rows, seeded rows and pending uploads behind, which would break the "no media" starting point of [03-empty-and-loading.md](03-empty-and-loading.md) and the item counts of [04-upload.md](04-upload.md), and signing up from the browser would replace its session. API-06 and API-08 also write database rows directly (see "Seeding" in [01-test-data.md](01-test-data.md)), for account A only. Give both accounts `qa-…@example.test` emails; write down both user ids (from the sign-up responses): [10-cleanup.md](10-cleanup.md) deletes exactly those.
+**Needs:** SET-01 to SET-04 (the preview is running). Use **two QA accounts created just for this file**, account A and account B, each driven by a plain HTTP client with its own cookie jar. Make them as "QA accounts" in [01-test-data.md](01-test-data.md) (sign up, read the code from Mailpit, verify with the password, which signs that client in; send an `Origin: http://localhost:4173` header), about 20 seconds apart because of the rate limits, and **keep both cookie jars and passwords for the whole run**: files 14, 15 and 16 use them again. Do **not** use the browser or the account from SET-06 here: these cases leave media rows, seeded rows and pending uploads behind, which would break the "no media" starting point of [03-empty-and-loading.md](03-empty-and-loading.md) and the item counts of [04-upload.md](04-upload.md), and signing in from the browser would replace its session. API-06 and API-08 also write database rows directly (see "Seeding" in [01-test-data.md](01-test-data.md)), for account A only. Give both accounts `qa-…@example.test` emails; write down both user ids (from the sign-up responses): [10-cleanup.md](10-cleanup.md) deletes exactly those. Soft delete (below) means a deleted item's row and objects stay until then.
 
 **Requests used below**
 
@@ -11,16 +11,19 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 - Finish: `POST /api/media/<id>/complete` answers with the item.
 - List: `GET /api/media` (60 per page, newest `takenAt` first) answers `{ items, nextCursor }`; continue with `?cursor=<nextCursor>`.
 - Files: `GET /api/media/<id>/original` and `/thumb` answer `302` with a presigned `GET` URL.
+- Delete: `DELETE /api/media` with JSON `{ mediaIds: [...] }` soft-deletes the caller's READY items among them and answers `{ deleted }` (API-09). There is no per-item delete route.
+- Error answers are JSON `{ "message": "..." }` when the request sends `Accept: application/json`. Only success answers carry `Cache-Control: private, no-store`; assert that header on the 200, 201, 204 and 302 answers, not on the 4xx ones.
 
 ## API-01 A session is required
 
-| Request (no session)                | Expected |
-| ----------------------------------- | -------- |
-| `GET /api/media`                    | 401      |
-| `POST /api/media` with a valid body | 401      |
-| `POST /api/media/x/complete`        | 401      |
-| `GET /api/media/x/original`         | 401      |
-| `GET /api/media/x/thumb`            | 401      |
+| Request (no session)                          | Expected |
+| --------------------------------------------- | -------- |
+| `GET /api/media`                              | 401      |
+| `POST /api/media` with a valid body           | 401      |
+| `POST /api/media/x/complete`                  | 401      |
+| `GET /api/media/x/original`                   | 401      |
+| `GET /api/media/x/thumb`                      | 401      |
+| `DELETE /api/media` with `{"mediaIds":["x"]}` | 401      |
 
 ## API-02 Happy path
 
@@ -30,22 +33,22 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 2. `PUT` 5000 random bytes to `original` with `Content-Type: text/html`: expect **403** (the type is signed into the URL). Repeat with `image/jpeg` but 4999 and then 5001 bytes: expect **403** (the length is signed too). Repeat with `image/jpeg` and exactly 5000 bytes: expect 2xx.
 3. `PUT` 800 random bytes to `thumb` with `Content-Type: image/webp`: expect **403** (thumbnails are always `image/jpeg`). Repeat with `image/jpeg` and 801 bytes: expect **403**. Repeat with `image/jpeg` and exactly 800 bytes: expect 2xx.
 4. While the item is still pending: `GET /api/media` does not list it, and `GET /api/media/<id>/original` answers 404.
-5. `POST /api/media/<id>/complete`: expect 200 and an item with `hasThumb: true`, `kind: "IMAGE"`, `name: "happy.jpg"`, `duration: null`, `takenAt: "2024-05-01T10:00:00.000Z"` and **exactly these six keys**: `id`, `kind`, `name`, `duration`, `takenAt`, `hasThumb`.
-6. In the database the row has width 4000, height 3000, size 5000 and contentType `image/jpeg` (they are stored although the item JSON omits them).
+5. `POST /api/media/<id>/complete`: expect 200 and an item with `hasThumb: true`, `kind: "IMAGE"`, `name: "happy.jpg"`, `duration: null`, `takenAt: "2024-05-01T10:00:00.000Z"` and **exactly these eight keys**: `id`, `kind`, `name`, `width`, `height`, `duration`, `takenAt`, `hasThumb` (`width` 4000 and `height` 3000 here).
+6. In the database the row has width 4000, height 3000, size 5000 and contentType `image/jpeg` (`size` and `contentType` are stored but not part of the item JSON), `status` READY and `deletedAt` null.
 7. Completing again answers 404 (the row is no longer pending).
 8. `GET /api/media` returns exactly this item with `nextCursor: null` and `Cache-Control: private, no-store`.
 9. For `thumb` and `original`: do not follow the redirect automatically. Expect 302, a `Location` on the storage origin and bucket, and `Cache-Control: private, no-store` (the redirect is never cached, so the ownership check runs on every request). Fetching the `Location` returns exactly the bytes uploaded, with `Content-Type: image/jpeg`.
 
 ## API-03 Completing: missing thumbnail, wrong size, missing upload
 
-| Situation                                                                                                                                                       | Expected                                                                                                                                                       |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create without `thumb`, upload only the original, complete                                                                                                      | `thumb` was `null`; complete gives `hasThumb: false`; `GET .../thumb` is 404; `GET .../original` is 302                                                        |
-| Create with size 100, `PUT` 200 bytes (more than declared) to `original`                                                                                        | 403 from the storage: nothing is stored, so completing answers 409                                                                                             |
-| Create with size 100, then put 200 bytes at `<userId>/<id>/original` straight into the bucket with the storage credentials (bypassing the signed URL), complete | 422; the row is deleted and its objects are removed from the bucket; completing again is 404 (this guard only matters for a store that ignores signed lengths) |
-| Create, upload nothing, complete                                                                                                                                | 409; the row stays pending so a client can retry                                                                                                               |
-| Create with `thumb` set to 2 MiB + 1                                                                                                                            | 201 with `thumb: null`: no upload URL is issued for a thumbnail that big                                                                                       |
-| Create with a small `thumb`, upload a 10 byte original, then put a thumbnail larger than 2 MiB at `<userId>/<id>/thumb` straight into the bucket, complete      | 200 with `hasThumb: false`; the oversized thumbnail object is removed                                                                                          |
+| Situation                                                                                                                                                       | Expected                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Create without `thumb`, upload only the original, complete                                                                                                      | `thumb` was `null`; complete gives `hasThumb: false`; `GET .../thumb` is 404; `GET .../original` is 302                                                                                          |
+| Create with size 100, `PUT` 200 bytes (more than declared) to `original`                                                                                        | 403 from the storage: nothing is stored, so completing answers 409                                                                                                                               |
+| Create with size 100, then put 200 bytes at `<userId>/<id>/original` straight into the bucket with the storage credentials (bypassing the signed URL), complete | 422; the row is hard-deleted (no `deletedAt` row is left) and its objects are removed from the bucket; completing again is 404 (this guard only matters for a store that ignores signed lengths) |
+| Create, upload nothing, complete                                                                                                                                | 409; the row stays pending so a client can retry                                                                                                                                                 |
+| Create with `thumb` set to 2 MiB + 1                                                                                                                            | 201 with `thumb: null`: no upload URL is issued for a thumbnail that big                                                                                                                         |
+| Create with a small `thumb`, upload a 10 byte original, then put a thumbnail larger than 2 MiB at `<userId>/<id>/thumb` straight into the bucket, complete      | 200 with `hasThumb: false`; the oversized thumbnail object is removed                                                                                                                            |
 
 ## API-04 Validation of `POST /api/media`
 
@@ -59,12 +62,13 @@ The HTTP contract behind the gallery. These cases need no page interaction. File
 
 With account A owning a pending upload and a finished item, signed in as account B:
 
-| Request by B                                    | Expected                          |
-| ----------------------------------------------- | --------------------------------- |
-| `POST /api/media/<A's pending id>/complete`     | 404, and A's row is still pending |
-| `GET /api/media/<A's id>/original` and `/thumb` | 404                               |
-| `POST /api/media/<A's finished id>/complete`    | 404                               |
-| `GET /api/media`                                | `items: []`, `nextCursor: null`   |
+| Request by B                                    | Expected                                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `POST /api/media/<A's pending id>/complete`     | 404, and A's row is still pending                                                      |
+| `GET /api/media/<A's id>/original` and `/thumb` | 404                                                                                    |
+| `POST /api/media/<A's finished id>/complete`    | 404                                                                                    |
+| `GET /api/media`                                | `items: []`, `nextCursor: null`                                                        |
+| `DELETE /api/media` with A's finished id        | 200 `{"deleted":0}` (not a 404, see API-09); A's row is untouched and A still lists it |
 
 A can still read its own item (302).
 
@@ -75,7 +79,7 @@ A can still read its own item (302).
 **Expected**
 
 - Paging with `nextCursor` until it is `null` returns every item exactly once, in 3 pages (60, 60 and the rest), in the same order as the database's `takenAt` descending then `id` descending.
-- Take the first page's `nextCursor`, then delete the row it points at (the last item of page 1). Requesting `?cursor=` with that cursor still works and returns the next 60 items, starting with the one that follows the deleted row.
+- Take the first page's `nextCursor`, then delete the row it points at (the last item of page 1) with `DELETE /api/media` (a soft delete: the cursor is a sort key, not a row id). Requesting `?cursor=` with that cursor still works and returns the next 60 items, starting with the one that follows the deleted row.
 - `?cursor=garbage` and `?cursor=abc_def` answer 400.
 
 ## API-07 The `original` and `thumb` route
@@ -95,6 +99,32 @@ A can still read its own item (302).
 
 **Steps:** create an upload, send its original and thumbnail, never complete it, and set its `createdAt` back 25 hours in the database. Also create a second, fresh pending upload. Then request the first page `GET /api/media`.
 
-**Expected:** the 25-hour-old row and both of its objects are gone; the fresh pending row is still there.
+**Expected:** the 25-hour-old row and both of its objects are gone (really gone: abandoned uploads are hard-deleted, not soft-deleted); the fresh pending row is still there.
 
 **Then, for the cursor path:** keep the `nextCursor` that this first-page request returned (account A has more than 60 READY items after API-06; run API-06 first or seed 70 placeholders). Only now create another pending upload and set its `createdAt` back 25 hours, then request `GET /api/media?cursor=<that nextCursor>`. That row is **not** purged: only a request without a cursor cleans up. Do not use an empty `?cursor=`: an empty value counts as no cursor and would purge.
+
+## API-09 Deleting: `DELETE /api/media`
+
+Soft delete: the row gets `deletedAt` and disappears from every listing, but it and its objects stay. Write the requests with `Content-Type: application/json`.
+
+**Needs:** account A with four finished items with thumbnails (`d1` to `d4`), account B with one (`b1`), and one pending upload of A (`p1`: created and sent but not completed).
+
+**Validation (A signed in; none of these deletes an item)**
+
+| Body                                                                                                          | Expected                                                                          |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| no body, a body that is not JSON, the JSON value `null`                                                       | 400 `Invalid request`                                                             |
+| `{}`, `{"mediaIds":"d1"}`, `{"mediaIds":[1]}`, `{"mediaIds":[""]}`, `{"mediaIds":[<an id of 65 characters>]}` | 400 `Invalid media ids`                                                           |
+| `{"mediaIds":[]}`                                                                                             | 400 `No media ids`                                                                |
+| 501 distinct strings                                                                                          | 400 `Too many items (500 at most)`                                                |
+| `{"mediaIds":[<one random UUID> repeated 501 times]}`                                                         | 200 `{"deleted":0}` (repeats collapse to one unknown id, so the limit is not hit) |
+
+**Effects, in order**
+
+1. `DELETE` with `{"mediaIds":["d1"]}`: 200 `{"deleted":1}`, `Cache-Control: private, no-store`. Then `GET /api/media` no longer lists `d1`; `GET /api/media/<d1>/original` and `/thumb` answer 404; in the database the row has `deletedAt` set, `status` READY and its other columns unchanged; both objects are still in the bucket.
+2. The same request again: 200 `{"deleted":0}` (an already-deleted item is not counted and `deletedAt` keeps its first value).
+3. `{"mediaIds":["d2","d3","<a random UUID>","<b1's id>","<p1's id>"]}`: 200 `{"deleted":2}`. Unknown, foreign and pending ids are skipped without an error, so a retry is safe. `b1` is still listed for B; `p1` is still pending (a later complete still works).
+4. One request with all of `d4` plus 499 random ids (500 in total) is accepted: 200 `{"deleted":1}`.
+5. B sends `{"mediaIds":["<A's finished id>"]}`: 200 `{"deleted":0}` and A's item is untouched. (Phase 9 of the plan says "404"; the code answers 200 with nothing deleted on purpose. Report this as it is.)
+6. `DELETE /api/media/<d1's id>` answers 404, with and without a session: that route does not exist any more.
+7. An item deleted here can no longer be added to an album (ALA-05).

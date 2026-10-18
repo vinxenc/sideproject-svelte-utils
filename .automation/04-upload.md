@@ -2,7 +2,7 @@
 
 From opening the dialog to what is stored. These cases build the data that [05-gallery.md](05-gallery.md), [06-upload-failure-and-background.md](06-upload-failure-and-background.md) and [07-lightbox.md](07-lightbox.md) use, so run them in order.
 
-**Needs for the whole file:** SET-01 to SET-07, the QA account signed in, the browser on `Photo & video`, and the files from [01-test-data.md](01-test-data.md).
+**Needs for the whole file:** SET-01 to SET-07, the QA account signed in, the browser on `Photo & video` (`/photo-video`), and the files from [01-test-data.md](01-test-data.md). The standard set is the data of the later files, so nothing in 12 to 16 may delete it: they make their own items.
 
 Labels the cases refer to: the round add button (accessible name `Add photos and videos`, `Uploading photos and videos` while uploading); the dialog title `Add to gallery`; buttons `Library` and `Camera` (square, in a row above the footer that swipes sideways), `Cancel` (idle) or `Hide` (uploading), `Submit` with a count such as `Submit (9)`, or `Uploading` while busy; per card `Remove <file name>` and `Retry <file name>`; the dialog's own close button `Close`.
 
@@ -59,7 +59,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 
 **Needs:** UPL-03. Read the QA account's rows.
 
-**Expected:** nine rows, all `READY`, and the list JSON items have exactly the keys `id`, `kind`, `name`, `duration`, `takenAt`, `hasThumb`.
+**Expected:** nine rows, all `READY`, and the list JSON items have exactly the keys `id`, `kind`, `name`, `width`, `height`, `duration`, `takenAt`, `hasThumb` (width and height are the same numbers as in the table, `null` where the table says empty; `size`, `contentType` and `status` are stored but not returned). `deletedAt` is null on every row.
 
 | Name             | kind  | contentType                                                   | size | width × height   | duration    | takenAt                | hasThumb |
 | ---------------- | ----- | ------------------------------------------------------------- | ---- | ---------------- | ----------- | ---------------------- | -------- |
@@ -126,8 +126,8 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 **Expected**
 
 - Cards show `250 MB` and, because the bytes are not a real video, a video icon with no preview, and they become ready within a few seconds (the preview step must not hang).
-- The texts seen include `Preparing`, `Uploading N%`, `Finishing` and `Added`. Each card's progress bar value only increases and ends at 100; many different values are seen.
-- At most 3 uploads in flight, `Library` and `Camera` disabled throughout, the dialog closes by itself and the toast reads `Added 2 items to the gallery`.
+- The texts seen include `Preparing`, `Uploading N%` and `Finishing`; `Added` shows only when one card finishes before the other (the last card to finish clears the list at once, so it is usually not caught). Each card's progress bar value only increases and ends at 100; many different values are seen.
+- At most 3 uploads in flight (2 here), `Library` and `Camera` disabled for as long as any card is in flight (they enable again only during the dialog's exit animation, after the last card finished), the dialog closes by itself and the toast reads `Added 2 items to the gallery`.
 
 ## UPL-11 Size labels
 
@@ -162,7 +162,7 @@ Opens the system file picker; an agent cannot drive it. See [11-manual-and-gaps.
 - Each photo is added to the list as `camera-<timestamp>.jpg` (an image/jpeg, the timestamp has milliseconds so two photos never share a name).
 - While recording a red timer counts up, the shutter turns into a red square and `Photo`, `Video` and `Done` are disabled. The audio is asked for at the first `Start recording` (a call with only `audio: true`). The result is added as `camera-<timestamp>.webm` (or `.mp4`) with a play badge and a duration.
 - `Done` closes the camera view and leaves the dialog and its list as they are. Escape does the same (a second Escape closes the dialog). Closing the camera ends the stream: every track's `readyState` is `ended`.
-- Closing the dialog in any other way while the camera is open (the dialog's `Close` button, a click on the backdrop) closes the camera too: opening the dialog again shows the source buttons, not the camera.
+- Closing the dialog in any other way while the camera is open (the dialog's `Close` button, a real click on the backdrop; `click()` on the overlay element does nothing) closes the camera too: opening the dialog again shows the source buttons, not the camera.
 - While the microphone prompt is open (make the `audio: true` request wait), a second press of the shutter does not make a second request. Switching to `Photo` meanwhile and then answering the prompt still starts the recording, and the shutter, whatever the mode, stops it: the recording is added to the list and `Photo`, `Video` and `Done` are enabled again. Closing the camera while the prompt is open ends the microphone tracks that arrive afterwards (`readyState` `ended`).
 - On a page without `navigator.mediaDevices` (set it to `undefined` before pressing `Camera`) the toast `The camera needs a secure (https) page` appears and no camera view opens.
 - Refusing access (make `getUserMedia` reject with `NotAllowedError`) shows the toast `Allow camera access to take photos` and no camera view; `NotFoundError` shows `No camera found`.
