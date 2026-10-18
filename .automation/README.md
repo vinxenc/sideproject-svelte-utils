@@ -109,6 +109,22 @@ Other areas the plans or the code define:
 | Service worker never caches media, albums or passwords            | RES-02, RES-04                                                 |
 | Mobile layout (selection bar, album screens, vault)               | MOB-01 to MOB-05, DEL-03, DEL-13, ALB-17, PWD-11               |
 
+## Real-phone cases (waiting for the owner's setup)
+
+Two cases cannot be run by an agent in the in-app browser and are reported `SKIPPED` until the owner has set up a phone the agent can drive:
+
+| Case                                              | What needs the real phone                                                                                                                          | Where it is written down                                                                                                             |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| UPL-12, the `Library` button (native file picker) | The picker is the operating system's, so an agent can only see its result: cards added after choosing photos and videos, nothing after cancelling. | [04-upload.md](04-upload.md) UPL-12 (the checks to make), [11-manual-and-gaps.md](11-manual-and-gaps.md)                             |
+| UPL-14, the `Camera` button on a phone            | A real camera, the permission prompt (also in the installed PWA), a page served over HTTPS and storage the phone can reach.                        | [04-upload.md](04-upload.md) UPL-13 and UPL-14, [debt/phone-camera-tunnel-test.md](debt/phone-camera-tunnel-test.md) (HTTPS tunnels) |
+
+Status: **parked.** The owner will set up the phone and the access an agent needs (the debt plan above is one way: tunnels for the app and the storage). Until then:
+
+- Do not try to run UPL-12 or UPL-14 on the desktop browser or an emulated phone; UPL-13 already covers the camera logic with a faked stream. Report both as `SKIPPED` with the reason "needs the owner's real phone".
+- When the setup exists, add its steps (how the agent reaches the phone, which tools drive it, how the QA account and cleanup work there) to this section, rewrite UPL-12 and UPL-14 so an agent can run them, and delete `debt/phone-camera-tunnel-test.md` once a phone run has passed.
+
+Out of scope on purpose: a browser run of "a second user cannot delete someone else's media". API-05, API-09 and ALA-11 and the unit tests cover it at the API; no browser case is planned.
+
 ## Report format
 
 Print one table, one row per case, then a short list of every failure with what was expected and what was seen:

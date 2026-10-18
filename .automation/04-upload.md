@@ -150,7 +150,7 @@ Labels the cases refer to: the round add button (accessible name `Add photos and
 
 ## UPL-12 The Library button
 
-Opens the system file picker; an agent cannot drive it. See [11-manual-and-gaps.md](11-manual-and-gaps.md).
+Opens the system file picker; an agent cannot drive it. Report `SKIPPED`: needs the owner's real phone, see "Real-phone cases" in [README.md](README.md) and [11-manual-and-gaps.md](11-manual-and-gaps.md).
 
 ## UPL-13 The Camera button
 
@@ -168,6 +168,8 @@ Opens the system file picker; an agent cannot drive it. See [11-manual-and-gaps.
 - Refusing access (make `getUserMedia` reject with `NotAllowedError`) shows the toast `Allow camera access to take photos` and no camera view; `NotFoundError` shows `No camera found`.
 
 ## UPL-14 The Camera button on a phone
+
+**Status:** the emulated-phone run below is what an agent can do today. The real-phone run (real camera, permission prompt, installed PWA, HTTPS) waits for the owner's setup; report it `SKIPPED` with "needs the owner's real phone", see "Real-phone cases" in [README.md](README.md) and [debt/phone-camera-tunnel-test.md](debt/phone-camera-tunnel-test.md).
 
 **Steps:** emulate a phone (mobile preset) and run UPL-13.
 
