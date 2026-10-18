@@ -279,7 +279,9 @@
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Delete {formatCount(confirmIds.length)}?</AlertDialog.Title>
-			<AlertDialog.Description>They leave your library and every album.</AlertDialog.Description>
+			<AlertDialog.Description>
+				{confirmIds.length === 1 ? 'It leaves' : 'They leave'} your library and every album.
+			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel disabled={deleting}>Cancel</AlertDialog.Cancel>

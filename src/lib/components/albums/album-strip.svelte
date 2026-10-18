@@ -92,8 +92,9 @@
 			<Button variant="link" size="sm" onclick={load}>Try again</Button>
 		</div>
 	{:else}
-		<!-- The negative margin and padding leave room for the fanned frames' rotation and shadow, which
-		     the overflow would otherwise clip. -->
+		<!-- The padding leaves room for the fanned frames' rotation and shadow, which the overflow would
+		     otherwise clip: the first card's left frame reaches about 50 px left of the card on hover, and the
+		     sidebar covers everything left of the page on desktop. -->
 		<!-- Dragging is a mouse-only extra: the albums stay focusable links and the strip scrolls
 		     natively with touch, wheel and keyboard. -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -106,7 +107,7 @@
 			ondragstart={(event) => event.preventDefault()}
 			style:scroll-snap-type={dragging ? 'none' : undefined}
 			class:select-none={dragging}
-			class="-mx-4 -my-3 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 py-3 sm:gap-12 pointer-fine:cursor-grab [&::-webkit-scrollbar]:hidden"
+			class="-mx-4 -my-3 flex snap-x snap-mandatory scroll-ps-8 scroll-pe-4 [scrollbar-width:none] gap-3 overflow-x-auto py-3 ps-8 pe-4 sm:scroll-ps-14 sm:gap-12 sm:ps-14 pointer-fine:cursor-grab [&::-webkit-scrollbar]:hidden"
 		>
 			{#if status === 'loading'}
 				{#each Array.from({ length: 5 }, (_, i) => i) as i (i)}

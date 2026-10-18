@@ -549,10 +549,22 @@ describe('Gallery bulk delete', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
 
 		expect(await screen.findByText('Delete 2 items?')).toBeTruthy();
+		expect(screen.getByText('They leave your library and every album.')).toBeTruthy();
 		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 		await waitFor(() => expect(screen.queryByText('Delete 2 items?')).toBeNull());
 		expect(deletes()).toEqual([]);
 		expect(screen.getByText('2 selected')).toBeTruthy();
+	});
+
+	it('says "It leaves" for a single item', async () => {
+		servePages({ '': { items: [a, b, c], nextCursor: null } });
+		await renderGallery();
+		await select('a.jpg');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete selected' }));
+
+		expect(await screen.findByText('Delete 1 item?')).toBeTruthy();
+		expect(screen.getByText('It leaves your library and every album.')).toBeTruthy();
 	});
 
 	it('sends the whole selection in one request, drops it from the grid and the selection, and reports the count', async () => {
