@@ -73,7 +73,7 @@ Labels: every tile has a round **select button** named `Select <file name>` (ari
 
 - Step 1: an alert dialog titled `Delete 3 items?` with the text `They leave your library and every album.`, buttons `Cancel` and a destructive `Delete`.
 - Steps 2 and 3: the dialog closes; the three items are still in the grid and **still selected** (`3 selected`); no request was sent (check the request log).
-- Step 4: the title reads `Delete 1 item?` (singular).
+- Step 4: the title reads `Delete 1 item?` (singular) and the text reads `It leaves your library and every album.` (two or more items read `They leave your library and every album.`, as in step 1).
 
 ## DEL-05 Deleting a selection is one request
 
