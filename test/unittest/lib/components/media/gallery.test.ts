@@ -10,6 +10,12 @@ import { FakeIntersectionObserver, intersect } from '../../../helpers/dom.js';
 import { albumSummary } from '../../../helpers/albums.js';
 import { deferred, mediaItem } from '../../../helpers/media.js';
 
+// A small cap, so the chunked delete is tested with a handful of tiles instead of 501 (slow on CI).
+vi.mock('#lib/albums/types.js', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/albums/types.js')>()),
+	MAX_ITEMS_PER_REQUEST: 3
+}));
+
 vi.mock('svelte-sonner', () => ({
 	toast: { error: vi.fn(), dismiss: vi.fn(), success: vi.fn(), info: vi.fn() }
 }));
@@ -682,11 +688,11 @@ describe('Gallery bulk delete', () => {
 			})
 		);
 		expect(deletes()).toHaveLength(2);
-		expect(tileNames(container)).toEqual(['m500.jpg']);
+		expect(tileNames(container)).toEqual([`m${MAX_ITEMS_PER_REQUEST}.jpg`]);
 		expect(screen.getByText('1 selected')).toBeTruthy();
 		expect(toast.success).not.toHaveBeenCalled();
 		expect(onalbumschanged).toHaveBeenCalledTimes(1);
-	}, 30_000);
+	});
 
 	it('describes a failure that is not an Error with a generic message', async () => {
 		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
