@@ -81,9 +81,7 @@
 						<AlertDialog.Title class="line-clamp-2 wrap-anywhere"
 							>Delete "{item.name}"?</AlertDialog.Title
 						>
-						<AlertDialog.Description>
-							It's removed from your vault for good. This can't be undone.
-						</AlertDialog.Description>
+						<AlertDialog.Description>It leaves your vault.</AlertDialog.Description>
 					</AlertDialog.Header>
 					<AlertDialog.Footer>
 						<AlertDialog.Cancel disabled={pending}>Cancel</AlertDialog.Cancel>

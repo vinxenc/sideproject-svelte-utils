@@ -3,7 +3,7 @@
 	import ImagesIcon from '@lucide/svelte/icons/images';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import { toast } from 'svelte-sonner';
-	import { untrack } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { addToAlbum, createAlbum } from '#lib/albums/api.js';
 	import { AlbumList } from '#lib/albums/album-list.svelte.js';
 	import { formatCount } from '#lib/albums/format.js';
@@ -37,6 +37,15 @@
 	let creating = $state(false);
 	let newName = $state('');
 	let newError = $state('');
+	let newNameInput = $state<HTMLInputElement | null>(null);
+
+	// Opens the inline form, with the cursor in its Name field.
+	async function toggleCreate() {
+		creating = !creating;
+		if (!creating) return;
+		await tick();
+		newNameInput?.focus();
+	}
 
 	function start() {
 		list.reset();
@@ -113,7 +122,7 @@
 				variant="ghost"
 				class="justify-start"
 				disabled={busyId !== null}
-				onclick={() => (creating = !creating)}
+				onclick={toggleCreate}
 			>
 				<PlusIcon data-icon="inline-start" />
 				New album
@@ -125,6 +134,7 @@
 						<Field.Label for="new-album-name">Name</Field.Label>
 						<Input
 							id="new-album-name"
+							bind:ref={newNameInput}
 							maxlength={ALBUM_NAME_MAX}
 							autocomplete="off"
 							bind:value={newName}

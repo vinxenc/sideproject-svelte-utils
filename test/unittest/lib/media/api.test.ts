@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_ITEMS_PER_REQUEST } from '#lib/albums/types.js';
-import { deleteMediaItems } from '#lib/media/api.js';
+import { deleteMediaItems, PartialDeleteError } from '#lib/media/api.js';
 
 const fetchMock = vi.fn();
 
@@ -60,5 +60,20 @@ describe('deleteMediaItems', () => {
 
 		await expect(deleteMediaItems(ids)).rejects.toThrow('Not found');
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('says which ids went through before a later chunk failed', async () => {
+		fetchMock
+			.mockResolvedValueOnce(json({ deleted: MAX_ITEMS_PER_REQUEST }))
+			.mockResolvedValueOnce(json({ message: 'Not found' }, 404));
+
+		const error = await deleteMediaItems(ids).catch((e: unknown) => e);
+
+		expect(error).toBeInstanceOf(PartialDeleteError);
+		expect(error).toMatchObject({
+			message: 'Not found',
+			deletedIds: ids.slice(0, MAX_ITEMS_PER_REQUEST)
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 });

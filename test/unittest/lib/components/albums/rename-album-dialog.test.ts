@@ -161,4 +161,18 @@ describe('RenameAlbumDialog', () => {
 
 		expect(screen.getByLabelText('Name').getAttribute('maxlength')).toBe('100');
 	});
+
+	it('keeps typed text when the album is refreshed while the dialog is open', async () => {
+		const { rerender } = render(RenameAlbumDialog, {
+			props: { open: true, album, onrenamed: vi.fn() }
+		});
+		await waitFor(() =>
+			expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Trip')
+		);
+		await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Holiday' } });
+
+		await rerender({ open: true, album: { id: 'a1', name: 'Trip 2' }, onrenamed: vi.fn() });
+
+		expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Holiday');
+	});
 });

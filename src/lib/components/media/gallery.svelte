@@ -13,7 +13,7 @@
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { deleteMediaItems } from '#lib/media/api.js';
+	import { deleteMediaItems, PartialDeleteError } from '#lib/media/api.js';
 	import type { MediaItem, MediaPage } from '#lib/media/types.js';
 	import MediaGrid from './media-grid.svelte';
 	import MediaLightbox from './media-lightbox.svelte';
@@ -179,7 +179,7 @@
 		confirmOpen = true;
 	}
 
-	// One request for the whole selection. What was deleted leaves the grid and the selection. On failure nothing changes, so the selection stays for a retry.
+	// One request per 500 ids, one after another. Whatever was deleted leaves the grid and the selection, even when a later request fails; the rest stays selected for a retry.
 	async function deleteSelected(event: MouseEvent) {
 		// The dialog stays open until the request has finished.
 		event.preventDefault();
@@ -196,7 +196,11 @@
 				onalbumschanged?.();
 			}
 		} catch (e) {
-			toast.error(`Couldn't delete ${formatCount(ids.length)}`, {
+			const gone = e instanceof PartialDeleteError ? e.deletedIds : [];
+			dropLocal(gone);
+			for (const id of gone) selected.delete(id);
+			if (gone.length > 0) onalbumschanged?.();
+			toast.error(`Couldn't delete ${formatCount(ids.length - gone.length)}`, {
 				description: e instanceof Error ? e.message : 'Something went wrong'
 			});
 		} finally {
@@ -275,9 +279,7 @@
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Delete {formatCount(confirmIds.length)}?</AlertDialog.Title>
-			<AlertDialog.Description>
-				They are removed from your library and from every album, and can't be recovered.
-			</AlertDialog.Description>
+			<AlertDialog.Description>They leave your library and every album.</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel disabled={deleting}>Cancel</AlertDialog.Cancel>

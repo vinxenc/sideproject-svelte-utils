@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { renameAlbum } from '#lib/albums/api.js';
 	import { ALBUM_NAME_MAX, checkAlbumName } from '#lib/albums/types.js';
@@ -24,10 +25,11 @@
 	let error = $state('');
 	let pending = $state(false);
 
-	// Starts from the current name each time the dialog opens, so a cancelled edit is forgotten.
+	// Starts from the current name each time the dialog opens, so a cancelled edit is forgotten. Only
+	// `open` re-runs it: a refreshed `album` while the dialog is open must not wipe the typed text.
 	$effect(() => {
 		if (open) {
-			name = album.name;
+			name = untrack(() => album.name);
 			error = '';
 		}
 	});

@@ -106,7 +106,7 @@
 			ondragstart={(event) => event.preventDefault()}
 			style:scroll-snap-type={dragging ? 'none' : undefined}
 			class:select-none={dragging}
-			class="-mx-6 -my-3 flex snap-x snap-mandatory scroll-px-6 [scrollbar-width:none] gap-3 overflow-x-auto px-6 py-3 sm:gap-12 pointer-fine:cursor-grab [&::-webkit-scrollbar]:hidden"
+			class="-mx-4 -my-3 flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 py-3 sm:gap-12 pointer-fine:cursor-grab [&::-webkit-scrollbar]:hidden"
 		>
 			{#if status === 'loading'}
 				{#each Array.from({ length: 5 }, (_, i) => i) as i (i)}

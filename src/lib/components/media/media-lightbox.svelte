@@ -282,7 +282,7 @@
 							Delete "{item.name}"?
 						</AlertDialog.Title>
 						<AlertDialog.Description>
-							It is removed from your library and from every album, and can't be recovered.
+							It leaves your library and every album.
 						</AlertDialog.Description>
 					</AlertDialog.Header>
 					<AlertDialog.Footer>

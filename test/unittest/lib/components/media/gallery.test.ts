@@ -3,6 +3,7 @@ import { createRawSnippet, flushSync } from 'svelte';
 import { toast } from 'svelte-sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Gallery from '#lib/components/media/gallery.svelte';
+import { MAX_ITEMS_PER_REQUEST } from '#lib/albums/types.js';
 import { uploads } from '#lib/media/uploads.svelte.js';
 import type { MediaItem, MediaPage } from '#lib/media/types.js';
 import { FakeIntersectionObserver, intersect } from '../../../helpers/dom.js';
@@ -636,6 +637,44 @@ describe('Gallery bulk delete', () => {
 		expect(toast.success).not.toHaveBeenCalled();
 		expect(onalbumschanged).not.toHaveBeenCalled();
 	});
+
+	it('takes out the first batch when a later one fails, and keeps the rest selected', async () => {
+		const many = Array.from({ length: MAX_ITEMS_PER_REQUEST + 1 }, (_, i) =>
+			mediaItem({
+				id: `m${i}`,
+				name: `m${i}.jpg`,
+				takenAt: new Date(Date.UTC(2024, 0, 1) - i * 60_000).toISOString()
+			})
+		);
+		let deleteCalls = 0;
+		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+			if (init?.method !== 'DELETE') return json({ items: many, nextCursor: null });
+			deleteCalls += 1;
+			return deleteCalls === 1
+				? json({ deleted: MAX_ITEMS_PER_REQUEST })
+				: json({ message: 'Not found' }, 404);
+		});
+		const onalbumschanged = vi.fn();
+		const { container } = render(Gallery, { props: { onalbumschanged } });
+		await screen.findByTitle('m0.jpg');
+		for (const button of container.querySelectorAll<HTMLButtonElement>(
+			'button[aria-label^="Select "]'
+		))
+			await fireEvent.click(button);
+
+		await deleteSelected();
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't delete 1 item", {
+				description: 'Not found'
+			})
+		);
+		expect(deletes()).toHaveLength(2);
+		expect(tileNames(container)).toEqual(['m500.jpg']);
+		expect(screen.getByText('1 selected')).toBeTruthy();
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(onalbumschanged).toHaveBeenCalledTimes(1);
+	}, 30_000);
 
 	it('describes a failure that is not an Error with a generic message', async () => {
 		fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
