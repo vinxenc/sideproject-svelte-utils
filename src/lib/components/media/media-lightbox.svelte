@@ -23,7 +23,8 @@
 		onloadmore,
 		onaddtoalbum,
 		onremovefromalbum,
-		ondelete
+		ondelete,
+		keysPaused = false
 	}: {
 		items: MediaItem[];
 		/** The item being viewed, or null when closed. Tracked by id so an upload or delete can't shift it. */
@@ -36,6 +37,8 @@
 		onremovefromalbum?: (id: string) => void;
 		/** Given to add "Delete" to the ⋯ menu, behind a confirmation. Settles once done; reports its own errors. */
 		ondelete?: (id: string) => Promise<void>;
+		/** Set while a dialog the parent owns (the album picker) is opening, before it takes focus. */
+		keysPaused?: boolean;
 	} = $props();
 
 	let contentRef: HTMLElement | null = $state(null);
@@ -71,7 +74,9 @@
 
 	function onkeydown(event: KeyboardEvent) {
 		// Arrow keys seek inside a focused video, and with a modifier they belong to the browser (Alt+Left is Back).
-		if (openId === null || event.target instanceof HTMLVideoElement) return;
+		// A dialog opened from the menu owns the keys, including the moment before it takes focus.
+		if (openId === null || confirmOpen || keysPaused || event.target instanceof HTMLVideoElement)
+			return;
 		if (event.altKey || event.ctrlKey || event.metaKey) return;
 		// Typing, a menu, or another dialog on top (e.g. the album picker) owns the arrow keys.
 		if (event.target instanceof HTMLElement) {

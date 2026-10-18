@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_ITEMS_PER_REQUEST } from '#lib/albums/types.js';
-import { deleteMedia, deleteMediaItems } from '#lib/media/api.js';
+import { deleteMediaItems } from '#lib/media/api.js';
 
 const fetchMock = vi.fn();
 
@@ -11,32 +11,6 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
-});
-
-describe('deleteMedia', () => {
-	it('deletes by encoded id and resolves with nothing', async () => {
-		fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
-
-		await expect(deleteMedia('m/1')).resolves.toBeUndefined();
-		expect(fetchMock).toHaveBeenCalledWith('/api/media/m%2F1', { method: 'DELETE' });
-	});
-
-	it('throws the server message on a failure', async () => {
-		fetchMock.mockResolvedValue(
-			new Response(JSON.stringify({ message: 'Not found' }), {
-				status: 404,
-				headers: { 'content-type': 'application/json' }
-			})
-		);
-
-		await expect(deleteMedia('m1')).rejects.toThrow('Not found');
-	});
-
-	it('falls back to the status when the body is not JSON', async () => {
-		fetchMock.mockResolvedValue(new Response('boom', { status: 500 }));
-
-		await expect(deleteMedia('m1')).rejects.toThrow('Request failed (500)');
-	});
 });
 
 describe('deleteMediaItems', () => {
@@ -73,6 +47,12 @@ describe('deleteMediaItems', () => {
 	it('makes no request for an empty selection', async () => {
 		expect(await deleteMediaItems([])).toBe(0);
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('falls back to the status when a failed chunk has no JSON body', async () => {
+		fetchMock.mockResolvedValueOnce(new Response('boom', { status: 500 }));
+
+		await expect(deleteMediaItems(['m1'])).rejects.toThrow('Request failed (500)');
 	});
 
 	it('stops at the first failed chunk and throws the server message', async () => {

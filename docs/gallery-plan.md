@@ -68,7 +68,7 @@ Decisions: per-user uploads · S3-compatible storage (RustFS locally) via `aws4f
 
 ### Phase 5: Delete
 
-- [x] `DELETE /api/media/[id]`: checks ownership, then soft-deletes the row (`deletedAt`); the stored objects and album links are kept. `DELETE /api/media` with `{ mediaIds }` soft-deletes a selection in one request (500 ids at most; the client splits bigger ones), touching only the caller's READY items
+- [x] `DELETE /api/media` with `{ mediaIds }` soft-deletes items in one request (500 ids at most; the client splits bigger ones), touching only the caller's READY items; the row is soft-deleted (`deletedAt`), and the stored objects and album links are kept. The lightbox's delete sends one id
 - [x] Select mode in the grid (a tile's circle on hover, or press and hold on touch, instead of checkboxes); bulk delete behind an `alert-dialog` confirmation
 - [x] Delete button in the lightbox; when the item it shows is deleted, the viewer moves to the next item (or the previous one when it was last), and closes when none is left (`dropLocal` in `gallery.svelte`)
 

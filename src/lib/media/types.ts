@@ -68,9 +68,6 @@ export type MediaItem = {
 
 export type MediaPage = { items: MediaItem[]; nextCursor: string | null };
 
-/** What `DELETE /api/media` returns: how many of the listed items were deleted. */
-export type DeleteItemsResult = { deleted: number };
-
 /** What `POST /api/media` returns: where to PUT the bytes. Each URL signs the Content-Type and the byte length it must be sent with. */
 export type UploadTicket = {
 	id: string;

@@ -13,7 +13,7 @@
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { deleteMedia, deleteMediaItems } from '#lib/media/api.js';
+	import { deleteMediaItems } from '#lib/media/api.js';
 	import type { MediaItem, MediaPage } from '#lib/media/types.js';
 	import MediaGrid from './media-grid.svelte';
 	import MediaLightbox from './media-lightbox.svelte';
@@ -140,7 +140,7 @@
 
 	async function deleteOne(id: string) {
 		try {
-			await deleteMedia(id);
+			await deleteMediaItems([id]);
 			dropLocal([id]);
 			selected.delete(id);
 			toast.success('Deleted');
@@ -189,7 +189,7 @@
 			const count = await deleteMediaItems(ids);
 			// Even when the server counted none, these ids no longer exist for the caller.
 			dropLocal(ids);
-			for (const id of ids) selected.delete(id);
+			selected.clear();
 			if (count > 0) {
 				toast.success(`Deleted ${formatCount(count)}`);
 				// The album strip's covers and counts change with it.
@@ -299,6 +299,7 @@
 	onaddtoalbum={(id) => openPicker([id])}
 	onremovefromalbum={album ? (id) => remove([id]) : undefined}
 	ondelete={deleteOne}
+	keysPaused={pickerOpen}
 />
 
 <!-- After the lightbox on purpose: portalled dialogs stack in template order (same z-index), so the picker opened from the lightbox menu must come later in the DOM. -->

@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import { checkMedia, THUMB_TYPE } from '#lib/media/types.js';
-import type { DeleteItemsResult, UploadTicket } from '#lib/media/types.js';
+import type { UploadTicket } from '#lib/media/types.js';
 import { parseMediaIds } from '#lib/server/albums.js';
 import { prisma, prismaBase } from '#lib/server/db.js';
 import {
@@ -103,5 +103,5 @@ export const DELETE: RequestHandler = async ({ locals, request }) => {
 	if (!locals.user) error(401, 'Sign in required');
 	const mediaIds = parseMediaIds(await request.json().catch(() => null));
 	const deleted = await deleteMediaItems(locals.user.id, mediaIds);
-	return json({ deleted } satisfies DeleteItemsResult, { headers: NO_STORE });
+	return json({ deleted } satisfies { deleted: number }, { headers: NO_STORE });
 };

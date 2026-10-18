@@ -20,7 +20,7 @@ export class AlbumList {
 		this.#limit = limit;
 	}
 
-	/** Next page; no-op while loading or done. Dedupes by id as a guard: an album never repeats across pages, but a stale page could. */
+	/** Next page; no-op while loading or done. Pages can't overlap: albums sort by createdAt, which never changes, and a page from before a reset is dropped. */
 	async load(): Promise<void> {
 		if (this.loading || this.done) return;
 		const generation = this.#generation;
@@ -29,8 +29,7 @@ export class AlbumList {
 		try {
 			const page = await fetchAlbums({ limit: this.#limit, cursor: this.#cursor });
 			if (generation !== this.#generation) return;
-			const fresh = page.items.filter((i) => !this.items.some((known) => known.id === i.id));
-			this.items = [...this.items, ...fresh];
+			this.items = [...this.items, ...page.items];
 			this.#cursor = page.nextCursor;
 			this.done = page.nextCursor === null;
 			this.loaded = true;

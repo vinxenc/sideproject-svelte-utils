@@ -242,6 +242,10 @@ describe('Gallery lightbox', () => {
 		expect(
 			lightbox.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
+
+		// The arrow keys stay off the viewer behind the picker: it must not move off the item being added.
+		await fireEvent.keyDown(document.body, { key: 'ArrowLeft' });
+		expect(screen.getByRole('heading', { name: 'b.jpg' })).toBeTruthy();
 	});
 });
 
@@ -261,7 +265,7 @@ describe('Gallery delete from the lightbox', () => {
 	it('deletes the item, drops it from the grid and moves the viewer to the next one', async () => {
 		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
 			init?.method === 'DELETE'
-				? new Response(null, { status: 204 })
+				? json({ deleted: 1 })
 				: json({ items: [a, b, c], nextCursor: null })
 		);
 		const onalbumschanged = vi.fn();
@@ -271,7 +275,11 @@ describe('Gallery delete from the lightbox', () => {
 		await openDelete();
 
 		await waitFor(() => expect(tileNames(container)).toEqual(['a.jpg', 'c.jpg']));
-		expect(fetchMock).toHaveBeenCalledWith('/api/media/b', { method: 'DELETE' });
+		expect(fetchMock).toHaveBeenCalledWith('/api/media', {
+			method: 'DELETE',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ mediaIds: ['b'] })
+		});
 		expect(toast.success).toHaveBeenCalledWith('Deleted');
 		expect(onalbumschanged).toHaveBeenCalled();
 		expect(await screen.findByRole('heading', { name: 'c.jpg' })).toBeTruthy();
@@ -295,9 +303,7 @@ describe('Gallery delete from the lightbox', () => {
 	});
 	it('closes the viewer when the only item it shows is deleted', async () => {
 		fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
-			init?.method === 'DELETE'
-				? new Response(null, { status: 204 })
-				: json({ items: [b], nextCursor: null })
+			init?.method === 'DELETE' ? json({ deleted: 1 }) : json({ items: [b], nextCursor: null })
 		);
 		const { container } = render(Gallery);
 		await screen.findByTitle('b.jpg');

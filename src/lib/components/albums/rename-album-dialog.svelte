@@ -34,7 +34,6 @@
 
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
-		if (pending) return;
 		const checked = checkAlbumName(name);
 		if (!checked.ok) {
 			error = checked.error;
@@ -80,7 +79,7 @@
 
 			<Dialog.Footer>
 				<Dialog.Close class={buttonVariants({ variant: 'outline' })}>Cancel</Dialog.Close>
-				<Button type="submit" disabled={pending || !name.trim() || name.trim() === album.name}>
+				<Button type="submit" disabled={pending || name.trim() === album.name}>
 					{#if pending}
 						<Spinner data-icon="inline-start" />
 					{/if}

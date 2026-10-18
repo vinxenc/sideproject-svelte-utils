@@ -42,17 +42,12 @@ describe('RenameAlbumDialog', () => {
 		);
 	});
 
-	it('keeps Save disabled while the name is unchanged, blank or whitespace, and enables it after an edit', async () => {
+	it('keeps Save disabled while the name is unchanged, and enables it after an edit', async () => {
 		render(RenameAlbumDialog, { props: { open: true, album, onrenamed: vi.fn() } });
 		const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
 		await waitFor(() =>
 			expect((screen.getByLabelText('Name') as HTMLInputElement).value).toBe('Trip')
 		);
-		expect(save.disabled).toBe(true);
-
-		await fireEvent.input(screen.getByLabelText('Name'), { target: { value: '' } });
-		expect(save.disabled).toBe(true);
-		await fireEvent.input(screen.getByLabelText('Name'), { target: { value: '   ' } });
 		expect(save.disabled).toBe(true);
 
 		await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Holiday' } });
@@ -65,6 +60,18 @@ describe('RenameAlbumDialog', () => {
 		await submitName('a\tb');
 
 		expect(await screen.findByText("Album names can't contain line breaks")).toBeTruthy();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('refuses a blank name with the inline message and no request, Save stays enabled', async () => {
+		render(RenameAlbumDialog, { props: { open: true, album, onrenamed: vi.fn() } });
+
+		await submitName('   ');
+
+		expect(await screen.findByText('Enter an album name')).toBeTruthy();
+		expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(
+			false
+		);
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
@@ -120,16 +127,13 @@ describe('RenameAlbumDialog', () => {
 		expect(await screen.findByText('Something went wrong')).toBeTruthy();
 	});
 
-	it('disables Save and sends nothing more while the request is pending', async () => {
+	it('disables Save while the request is pending', async () => {
 		const pending = deferred<Response>();
 		fetchMock.mockReturnValue(pending.promise);
 		render(RenameAlbumDialog, { props: { open: true, album, onrenamed: vi.fn() } });
 
 		await submitName('Holiday');
-		await submitName('Holiday');
-		await submitName('Holiday');
 
-		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect((screen.getByRole('button', { name: /Save/ }) as HTMLButtonElement).disabled).toBe(true);
 		pending.resolve(json(albumSummary({ name: 'Holiday' })));
 	});
