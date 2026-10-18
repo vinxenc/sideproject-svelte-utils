@@ -101,7 +101,7 @@ Labels: the page has an `h1` `Passwords`, a button `Add` at its right, a search 
 **Expected**
 
 - Steps 1 and 2: a sheet with the letter tile, the name, a badge with the type (`API key`), `Username or email` (`ops@example.test`; `—` for `QA Visa`), `Password` with its own eye (long values wrap), and `Added` with the date in medium form.
-- Step 3: an alert dialog `Delete "QA Stripe key"?` with `It's removed from your vault for good. This can't be undone.` and `Cancel` / `Delete password`. Cancel changes nothing.
+- Step 3: an alert dialog `Delete "QA Stripe key"?` with `It leaves your vault.` and `Cancel` / `Delete password`. Cancel changes nothing.
 - Step 4: one request, `DELETE /api/passwords/<id>` answered 204 (empty body); the dialog shows a spinner while it runs; toast `Password deleted`; the list refreshes, the row is gone and the sheet closes by itself. In the database the row has `deletedAt` set.
 
 ## PWD-07 Swipe a row to delete it (no confirmation)

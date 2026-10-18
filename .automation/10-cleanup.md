@@ -35,7 +35,7 @@ DELETE FROM media WHERE "userId" = '<this run's user id>' AND name LIKE 'seed-%'
 DELETE FROM album WHERE "userId" = '<this run's user id>' AND name LIKE 'seedalb-%';
 ```
 
-`album_media` links go with their album or media row (cascade). Hard deletes like these go straight to SQL, not through the app's soft-deleting client; the objects of such rows (if any) are removed by prefix as in CLN-02 step 4 or left for the final cleanup.
+`album_media` links go with their album or media row (cascade). Hard deletes like these go straight to SQL, not through the app's soft-deleting client. Remove only the objects under each deleted media id's `<userId>/<mediaId>/` prefix (never CLN-02 step 4's `<userId>/` prefix, which would also take the objects of media this case did not select), or leave them for the final cleanup.
 
 **Expected:** only rows of the named user and prefix are gone (count before and after).
 

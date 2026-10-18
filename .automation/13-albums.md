@@ -2,7 +2,7 @@
 
 The album strip on `/photo-video`, the album list, an album's page and everything that puts items into an album or takes them out. The API behind it is [14-albums-api.md](14-albums-api.md). Deleting an album or an item is a soft delete: rows get `deletedAt`, links in `album_media` and the stored objects stay.
 
-> Executed in part 2 of the first run (2026-10-18): ALB-01 to ALB-18 pass; ALB-05 first failed (arrow key right after choosing `Add to album` moved the viewer), was fixed with `keysPaused` and passed the real-key browser re-check (see [11-manual-and-gaps.md](11-manual-and-gaps.md)); wording fixed where the run found it wrong (ALB-13). Not run: a card with exactly one photo on a phone (ALB-17).
+> Executed in part 2 of the first run (2026-10-18): ALB-01 to ALB-18 pass (ALB-17 and ALB-18 were changed afterwards and run again on 2026-10-18: ALB-18 passes; ALB-17 passes its width check and fails the new check that the first card's fan stays in view (a pre-existing cut by the sidebar), see [11-manual-and-gaps.md](11-manual-and-gaps.md)); ALB-05 first failed (arrow key right after choosing `Add to album` moved the viewer), was fixed with `keysPaused` and passed the real-key browser re-check (see [11-manual-and-gaps.md](11-manual-and-gaps.md)); wording fixed where the run found it wrong (ALB-13). A card with exactly one photo on a phone (ALB-17) followed its link on the first tap in the re-run.
 
 **Needs for the whole file:** [04-upload.md](04-upload.md) done (the standard set is stored and is what the albums hold), [12-delete.md](12-delete.md) done, the browser account signed in on `/photo-video`, a desktop-sized window unless a case says otherwise. The browser account has no albums when the file starts (EMP-04 and EMP-05 checked that; if an earlier run left albums in it, say so). Album names used below: `QA Holidays`, `QA Trip`, `QA Picks`. Never delete the standard set here; the cases that delete items make their own.
 
@@ -190,9 +190,12 @@ Do **not** let the browser save a file; the case intercepts the click.
 
 **Needs:** phone preset (375 × 812), albums `QA Picks` and `QA Trip` with photos, one album with none. Reset the viewport at the end.
 
-**Steps:** open `/photo-video`, read the strip. Open `/photo-video/albums`. Dispatch a touch `pointerdown` then `click` on a card with photos (once), then once more.
+**Steps:** on the desktop preset (1440 × 900) open `/photo-video` and run `document.documentElement.scrollWidth` and `document.documentElement.clientWidth`. Then switch to the phone preset, open `/photo-video`, read the strip. Open `/photo-video/albums`. Dispatch a touch `pointerdown` then `click` on a card with photos (once), then once more. Read the two document widths again on the phone.
 
 **Expected**
+
+- At 1440 px and at 375 px the page does not scroll sideways: `scrollWidth` is at most `clientWidth`. (The strip's row used to end 8 px past the page at 1440 px; it now stops at the layout's padding.)
+- The first card keeps its frames in view. With a card with three photos first in the strip (create one if the newest album has none), at 1440 px and at rest, no `.frame` of that card starts left of the strip row's left edge (`getBoundingClientRect().left` of each frame is at least that of the row), and the hovered fan (real mouse over the card) does not lose its left frame or the shadow to the clip either. (First run, 2026-10-18: fails, and it failed before the 16 px change too: the content area starts at x = 256 and the fixed opaque sidebar covers everything left of it; the first card sits at x = 272 and its left frame starts at x = 247 at rest and x = 220 fanned. Clipping or padding the row does not help, only more room left of the first card. At 375 px there is no sidebar: the card starts at 16 px and its frames at 2.5 px at rest, so the frame fits and only the shadow blur is cut by the screen edge; fanned by touch the left frame reaches x = -12, past the screen edge as before.)
 
 - Strip cards are 144 px wide, snap to the start when scrolled, and the row is the only thing that scrolls sideways; the page itself does not (document width = viewport width).
 - The albums page has two columns of cards.
@@ -206,9 +209,11 @@ Do **not** let the browser save a file; the case intercepts the click.
 1. Create `QA Last` through the API and two real items `last-1.png` and `last-2.png` (distinct `takenAt`, `last-2` newer) linked into it by completing the uploads with `{albumId}`. Open the album page; the order is `last-2.png`, `last-1.png`.
 2. Open `last-1.png` (the last one), `More options` › `Delete` › `Delete`.
 3. Delete the item the viewer now shows the same way.
+4. Click `Photo & video` in the sidebar. The album page has no strip, so the strip is read only from here.
 
 **Expected**
 
 - Step 2: the viewer stays open and shows the **previous** item `last-2.png` (there is no next one). The grid behind has one tile.
-- Step 3: the viewer **closes** (nothing is left), the toast is `Deleted`, and the page shows `This album is empty`. The strip count of `QA Last` is `No items`.
+- Step 3: the viewer **closes** (nothing is left), the toast is `Deleted`, and the page shows `This album is empty`.
+- Step 4: the strip card `QA Last` shows `No items`.
 - Both are soft deletes (`deletedAt` set, objects kept).

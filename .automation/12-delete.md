@@ -2,7 +2,7 @@
 
 Select mode in the grid, the selection bar, deleting a selection in one request, and deleting one item from the viewer. The API contract of `DELETE /api/media` is API-09 in [02-api.md](02-api.md); this file is the page. Deleting is a **soft delete**: the row gets `deletedAt`, the stored objects stay.
 
-> Written from the code and run once (see [11-manual-and-gaps.md](11-manual-and-gaps.md)); the failure branch of DEL-12 (the second request failing) has not been exercised. Toast texts come from `gallery.svelte` and `media-lightbox.svelte` as they are now; the viewer's Delete calls the same bulk `DELETE /api/media` with one id (there is no per-item route).
+> Written from the code and run once (see [11-manual-and-gaps.md](11-manual-and-gaps.md)); DEL-12 was rewritten after that run and run again on 2026-10-18 (see [11-manual-and-gaps.md](11-manual-and-gaps.md)). Toast texts come from `gallery.svelte` and `media-lightbox.svelte` as they are now; the viewer's Delete calls the same bulk `DELETE /api/media` with one id (there is no per-item route).
 
 **Needs for the whole file:** [04-upload.md](04-upload.md) to [07-lightbox.md](07-lightbox.md) done, the browser account signed in on `/photo-video`, desktop-sized window unless a case says otherwise. Never delete the standard set (file 09 still uses it): this file deletes only the items it makes.
 
@@ -71,7 +71,7 @@ Labels: every tile has a round **select button** named `Select <file name>` (ari
 
 **Expected**
 
-- Step 1: an alert dialog titled `Delete 3 items?` with the text `They are removed from your library and from every album, and can't be recovered.`, buttons `Cancel` and a destructive `Delete`.
+- Step 1: an alert dialog titled `Delete 3 items?` with the text `They leave your library and every album.`, buttons `Cancel` and a destructive `Delete`.
 - Steps 2 and 3: the dialog closes; the three items are still in the grid and **still selected** (`3 selected`); no request was sent (check the request log).
 - Step 4: the title reads `Delete 1 item?` (singular).
 
@@ -120,7 +120,7 @@ Labels: every tile has a round **select button** named `Select <file name>` (ari
 
 **Expected**
 
-- Step 1: the dialog is titled `Delete "del-06"?` with the text `It is removed from your library and from every album, and can't be recovered.` and `Cancel` / `Delete`; Cancel changes nothing.
+- Step 1: the dialog is titled `Delete "del-06"?` with the text `It leaves your library and every album.` and `Cancel` / `Delete`; Cancel changes nothing.
 - Step 2: while the request is pending the dialog stays open with a spinner on `Delete`; the request is `DELETE /api/media` with the body `{"mediaIds":["<del-06's id>"]}` (one id) and the answer is `{"deleted":1}`. A toast `Deleted` appears.
 - Step 3: the viewer **stays open and moves to the next item** in grid order (`del-05`): its name is in the footer, `Previous` goes back to `del-07`. The tile of `del-06` is gone from the grid behind. The album strip refreshed.
 - Step 4: a toast `Couldn't delete` with the description `late`; the viewer stays on the same item; the item is still in the grid.
@@ -149,7 +149,13 @@ Labels: every tile has a round **select button** named `Select <file name>` (ari
 
 ## DEL-12 More than 500 at once (heavy, optional)
 
-The client splits a selection into requests of at most 500 ids, one after another. **Steps:** seed 510 more placeholders (prefix `bulk`, any `takenAt`), load every page by scrolling, click all 510 select buttons from the page (`click()` on each), delete them with the recorder armed. **Expected:** two `DELETE /api/media` requests in sequence with 500 and 10 ids, one toast `Deleted 510 items`. If the answer to one request fails, the first batch stays deleted and the toast `Couldn't delete 510 items` appears with the selection kept. Skip this case if the run is short; the server limit itself is API-09.
+The client splits a selection into requests of at most 500 ids, one after another. The case has three parts. A successful delete removes the rows it deletes, so the three parts cannot share the same 510 rows: **run the two failure parts first (they use one set of 510 rows), then seed again for the success part.** Seed 510 placeholders (prefix `bulka`, `takenAt` = a fixed start plus `g` minutes for row `g`, so that the grid order is `bulka-510` first and `bulka-001` last), reload the page, load every page by scrolling (the library then shows the 510 and the real items), click all 510 select buttons from the page in grid order (`click()` on each) and wrap `window.fetch` as described under "Making a request fail or wait" in [01-test-data.md](01-test-data.md).
+
+**Failure, first request:** make the first `DELETE /api/media` answer `404` with `{"message":"Not found"}` (the stub answers it without reaching the server) and delete all 510. **Expected:** one `DELETE` only (500 ids); nothing leaves the grid (510 tiles of the prefix remain, and no row has `deletedAt`); all 510 stay selected (`510 selected`); the toast is `Couldn't delete 510 items` with the description `Not found`; the album strip is not refetched (no `GET /api/albums?limit=5`).
+
+**Failure, second request (the same 510, still selected):** now make the second `DELETE /api/media` answer `404` with `{"message":"Not found"}` and let the first go through. Delete. **Expected:** two `DELETE` requests (500 and 10 ids). The first 500 leave the grid at once, and their rows have `deletedAt` set (check in the database; with that `takenAt` the first 500 in grid order, `bulka-011` to `bulka-510`, are gone and `bulka-001` to `bulka-010` are alive). The bar reads `10 selected` and those 10 stay selected. The toast is `Couldn't delete 10 items` with the description `Not found`, and no `Deleted` toast. The album strip refreshes: a `GET /api/albums?limit=5` follows the failure, after the second `DELETE`.
+
+**Success:** seed 500 more rows (prefix `bulkb`) so that, with the 10 left over, 510 are alive; reload, load every page, select all 510 (`bulk` prefixes), restore `fetch` (recorder only) and delete. **Expected:** two `DELETE /api/media` requests in sequence with 500 and 10 ids, both answered 200, no request to `/api/media/<id>`, one toast `Deleted 510 items`, nothing selected afterwards, a `GET /api/albums?limit=5` after the second one, and all 510 rows with `deletedAt`. Skip the case if the run is short; the server limit itself is API-09. Purge the seeded rows afterwards (CLN-03).
 
 ## DEL-13 The selection bar on a phone
 
