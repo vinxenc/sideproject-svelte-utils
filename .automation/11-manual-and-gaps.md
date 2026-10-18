@@ -71,6 +71,7 @@ Checked live while writing: the Mailpit API (`/api/v1/search?query=to:<email>` a
 
 - The gallery on the dev server (`pnpm dev`, port 5173). The suite uses the production preview only; a dev run could expose differences in server-rendering or the service worker (which only exists in production).
 - A second browser (Firefox) and other operating systems.
+- Leaving the page or signing out while the upload dialog is still open with a selection (for example with the browser's Back button): BG-06 and BG-07 close the dialog first, which clears the selection, so what the app does with a held selection on navigation is not checked.
 - Keyboard-only use of the dialog, the viewer, the selection bar and the vault beyond what the cases say (tab order, focus return after closing).
 - Safari, Firefox and a physical phone for any of the new screens (select mode, album strip, vault).
 
